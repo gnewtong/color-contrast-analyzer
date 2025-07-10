@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ColorRamp, ColorStop } from './ContrastUtils';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { ColorRampPasteDialog } from './ColorRampPasteDialog';
-import { Plus, Trash2, Upload, Download } from 'lucide-react';
+import { Plus, Trash2, Upload, Download, Copy } from 'lucide-react';
 
 interface ColorRampEditorProps {
   colorRamps: ColorRamp[];
@@ -13,6 +13,9 @@ interface ColorRampEditorProps {
 }
 
 export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEditorProps) {
+  const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
+  const [editingStates, setEditingStates] = useState<{ [key: string]: { name: string; hex: string } }>({});
+
   const addColorRamp = () => {
     const newRamp: ColorRamp = {
       id: `ramp-${Date.now()}`,
@@ -62,6 +65,12 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
     );
   };
 
+  // Hex color validation
+  const isValidHexColor = (color: string): boolean => {
+    const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+    return hexRegex.test(color);
+  };
+
   const updateColorStop = (rampId: string, stopIndex: number, field: 'name' | 'hex', value: string) => {
     onColorRampsChange(
       colorRamps.map(ramp =>
@@ -77,20 +86,79 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
     );
   };
 
-  // Export color ramp as JSON
-  const exportColorRamp = (ramp: ColorRamp) => {
-    const data = {
-      name: ramp.name,
-      stops: ramp.stops.map(stop => ({ name: stop.name, hex: stop.hex }))
-    };
+  const handleStopChange = (rampId: string, stopIndex: number, field: 'name' | 'hex', value: string) => {
+    const key = `${rampId}-${stopIndex}`;
+    setEditingStates(prev => ({
+      ...prev,
+      [key]: {
+        ...prev[key],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleStopBlur = (rampId: string, stopIndex: number, field: 'name' | 'hex') => {
+    const key = `${rampId}-${stopIndex}`;
+    const editingState = editingStates[key];
+    if (!editingState) return;
+
+    const value = editingState[field];
     
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${ramp.name || 'color-ramp'}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Validate hex color before updating
+    if (field === 'hex') {
+      if (!isValidHexColor(value)) {
+        // Revert to previous valid value by clearing editing state
+        setEditingStates(prev => {
+          const newState = { ...prev };
+          delete newState[key];
+          return newState;
+        });
+        return; // Don't update if invalid
+      }
+    }
+
+    updateColorStop(rampId, stopIndex, field, value);
+    
+    // Clear editing state
+    setEditingStates(prev => {
+      const newState = { ...prev };
+      delete newState[key];
+      return newState;
+    });
+  };
+
+  // Copy color ramp as JSON
+  const copyColorRampAsJSON = async (ramp: ColorRamp) => {
+    const buttonId = `json-${ramp.id}`;
+    setLoadingStates(prev => ({ ...prev, [buttonId]: true }));
+    
+    try {
+      const data = {
+        name: ramp.name,
+        stops: ramp.stops.map(stop => ({ name: stop.name, hex: stop.hex }))
+      };
+      
+      await navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Failed to copy JSON:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [buttonId]: false }));
+    }
+  };
+
+  // Copy HEX values
+  const copyHexValues = async (ramp: ColorRamp) => {
+    const buttonId = `hex-${ramp.id}`;
+    setLoadingStates(prev => ({ ...prev, [buttonId]: true }));
+    
+    try {
+      const hexValues = ramp.stops.map(stop => stop.hex).join('\n');
+      await navigator.clipboard.writeText(hexValues);
+    } catch (error) {
+      console.error('Failed to copy HEX values:', error);
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [buttonId]: false }));
+    }
   };
 
   return (
@@ -131,10 +199,34 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => exportColorRamp(ramp)}
-                  title="Export as JSON"
+                  onClick={() => copyColorRampAsJSON(ramp)}
+                  title="Copy as JSON"
+                  aria-label={`Copy ${ramp.name} color ramp as JSON data`}
+                  disabled={loadingStates[`json-${ramp.id}`]}
+                  className={loadingStates[`json-${ramp.id}`] ? 'loading' : ''}
                 >
-                  <Download className="w-4 h-4" />
+                  {loadingStates[`json-${ramp.id}`] ? (
+                    <div className="loading-spinner mr-1" />
+                  ) : (
+                    <Copy className="w-4 h-4 mr-1" />
+                  )}
+                  JSON
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => copyHexValues(ramp)}
+                  title="Copy HEX values"
+                  aria-label={`Copy ${ramp.name} color ramp HEX values`}
+                  disabled={loadingStates[`hex-${ramp.id}`]}
+                  className={loadingStates[`hex-${ramp.id}`] ? 'loading' : ''}
+                >
+                  {loadingStates[`hex-${ramp.id}`] ? (
+                    <div className="loading-spinner mr-1" />
+                  ) : (
+                    <Copy className="w-4 h-4 mr-1" />
+                  )}
+                  HEX
                 </Button>
                 <Button
                   size="sm"
@@ -142,6 +234,7 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
                   onClick={() => removeColorRamp(ramp.id)}
                   className="bg-red-500 hover:bg-red-600 text-white border border-red-600"
                   title="Delete color ramp"
+                  aria-label={`Delete ${ramp.name} color ramp`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -155,6 +248,8 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
                   <div
                     className="w-8 h-8 rounded border border-gray-300"
                     style={{ backgroundColor: stop.hex }}
+                    aria-label={`Color swatch for ${stop.name}: ${stop.hex}`}
+                    role="img"
                   />
                   
                   <div className="flex items-center gap-2 flex-1">
@@ -162,8 +257,15 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
                       <Label htmlFor={`name-${ramp.id}-${stopIndex}`} className="text-xs">Name</Label>
                       <Input
                         id={`name-${ramp.id}-${stopIndex}`}
-                        value={stop.name}
-                        onChange={(e) => updateColorStop(ramp.id, stopIndex, 'name', e.target.value)}
+                        value={editingStates[`${ramp.id}-${stopIndex}`]?.name ?? stop.name}
+                        onChange={(e) => handleStopChange(ramp.id, stopIndex, 'name', e.target.value)}
+                        onBlur={() => handleStopBlur(ramp.id, stopIndex, 'name')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                        }}
                         className="h-8 w-20"
                       />
                     </div>
@@ -171,8 +273,15 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
                       <Label htmlFor={`hex-${ramp.id}-${stopIndex}`} className="text-xs">Hex</Label>
                       <Input
                         id={`hex-${ramp.id}-${stopIndex}`}
-                        value={stop.hex}
-                        onChange={(e) => updateColorStop(ramp.id, stopIndex, 'hex', e.target.value)}
+                        value={editingStates[`${ramp.id}-${stopIndex}`]?.hex ?? stop.hex}
+                        onChange={(e) => handleStopChange(ramp.id, stopIndex, 'hex', e.target.value)}
+                        onBlur={() => handleStopBlur(ramp.id, stopIndex, 'hex')}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            e.currentTarget.blur();
+                          }
+                        }}
                         className="h-8 w-24"
                         placeholder="#000000"
                       />
@@ -184,6 +293,7 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
                     variant="ghost"
                     onClick={() => removeColorStop(ramp.id, stopIndex)}
                     disabled={ramp.stops.length <= 1}
+                    aria-label={`Remove color stop ${stop.name} from ${ramp.name}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

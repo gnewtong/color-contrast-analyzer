@@ -43,14 +43,14 @@ export default function App() {
           <p className="text-gray-600 mb-4">
             Analyze contrast ratios between color ramps to ensure accessibility compliance
           </p>
-          <div className="flex justify-center gap-4 text-sm">
-            <Badge variant="secondary">
-              {colorRamps.length} Color Ramp{colorRamps.length !== 1 ? 's' : ''}
-            </Badge>
-            <Badge variant="secondary">
-              {currentContrastPairs} Active Contrast Pair{currentContrastPairs !== 1 ? 's' : ''}
-            </Badge>
-          </div>
+                  <div className="flex justify-center gap-4 text-sm" role="status" aria-live="polite">
+          <Badge variant="secondary">
+            {colorRamps.length} Color Ramp{colorRamps.length !== 1 ? 's' : ''}
+          </Badge>
+          <Badge variant="secondary">
+            {currentContrastPairs} Active Contrast Pair{currentContrastPairs !== 1 ? 's' : ''}
+          </Badge>
+        </div>
         </div>
 
         <Tabs defaultValue="grid" className="w-full">
@@ -63,17 +63,18 @@ export default function App() {
             <Card>
               <CardHeader>
                 <CardTitle>Contrast Ratio Matrix</CardTitle>
-                <div className="flex gap-4 text-sm">
+                <div className="flex gap-4 text-sm" role="group" aria-labelledby="legend-title">
+                  <div id="legend-title" className="sr-only">Contrast Level Legend</div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#d5efb5] border border-gray-300 rounded"></div>
+                    <div className="w-4 h-4 bg-[#d5efb5] border border-gray-300 rounded" aria-label="AAA/AA level - green background"></div>
                     <span>AAA / AA (&gt;4.5:1)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#feecbc] border border-gray-300 rounded"></div>
+                    <div className="w-4 h-4 bg-[#feecbc] border border-gray-300 rounded" aria-label="AA Large level - yellow background"></div>
                     <span>AA Large (&gt;3:1)</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-[#f6f5f6] border border-gray-300 rounded"></div>
+                    <div className="w-4 h-4 bg-[#f6f5f6] border border-gray-300 rounded" aria-label="Fail level - gray background"></div>
                     <span>Fail (&lt;3:1)</span>
                   </div>
                 </div>

@@ -31,6 +31,67 @@ export function ContrastGrid({
     return hexRegex.test(color);
   };
 
+  // Get accessible text colors with proper contrast calculation
+  const getAccessibleTextColors = (backgroundColor: string) => {
+    // Convert hex to RGB
+    const hex = backgroundColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    // Calculate relative luminance using WCAG formula
+    const getLuminance = (r: number, g: number, b: number) => {
+      const [rs, gs, bs] = [r, g, b].map(c => {
+        c = c / 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    };
+    
+    const bgLuminance = getLuminance(r, g, b);
+    
+    // Calculate contrast ratios against black and white
+    const blackLuminance = 0;
+    const whiteLuminance = 1;
+    
+    const contrastWithBlack = (Math.max(bgLuminance, blackLuminance) + 0.05) / (Math.min(bgLuminance, blackLuminance) + 0.05);
+    const contrastWithWhite = (Math.max(bgLuminance, whiteLuminance) + 0.05) / (Math.min(bgLuminance, whiteLuminance) + 0.05);
+    
+    // Choose the better contrast option
+    const useWhiteText = contrastWithWhite > contrastWithBlack;
+    const bestContrast = useWhiteText ? contrastWithWhite : contrastWithBlack;
+    
+    // Check if we need text shadow for borderline cases
+    const minContrast = 4.5; // WCAG AA standard for normal text
+    const needsShadow = bestContrast < minContrast;
+    
+    // For very dark backgrounds, always use white text
+    if (bgLuminance < 0.1) {
+      return {
+        textColor: 'text-white',
+        hexColor: 'text-white/70',
+        textShadow: 'drop-shadow(0 0 2px rgba(0,0,0,0.8))'
+      };
+    }
+    
+    // For very light backgrounds, always use black text
+    if (bgLuminance > 0.8) {
+      return {
+        textColor: 'text-black',
+        hexColor: 'text-black/70',
+        textShadow: 'none'
+      };
+    }
+    
+    return {
+      textColor: useWhiteText ? 'text-white' : 'text-black',
+      hexColor: useWhiteText ? 'text-white/70' : 'text-black/70',
+      textShadow: needsShadow ? 'drop-shadow(0 0 2px rgba(0,0,0,0.8))' : 'none'
+    };
+  };
+
+
+
   // Update color stop
   const updateColorStop = (rampId: string, stopIndex: number, field: 'name' | 'hex', value: string) => {
     if (!onColorRampsChange) return;
@@ -155,18 +216,18 @@ export function ContrastGrid({
     stop, 
     rampId, 
     stopIndex, 
-    isLightBackground, 
     textColor, 
     hexColor, 
+    textShadow, 
     fontSizes, 
     padding
   }: {
     stop: { name: string; hex: string };
     rampId: string;
     stopIndex: number;
-    isLightBackground: boolean;
     textColor: string;
     hexColor: string;
+    textShadow: string;
     fontSizes: { name: string; hex: string };
     padding: string;
   }) => {
@@ -213,6 +274,13 @@ export function ContrastGrid({
       }
     };
 
+    const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleNameBlur();
+      }
+    };
+
     const handleHexBlur = () => {
       setIsEditingHex(false);
       if (hexValue !== stop.hex) {
@@ -222,6 +290,13 @@ export function ContrastGrid({
           // Reset to original value if invalid
           setHexValue(stop.hex);
         }
+      }
+    };
+
+    const handleHexKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleHexBlur();
       }
     };
 
@@ -238,16 +313,24 @@ export function ContrastGrid({
             onChange={handleNameChange}
             onFocus={handleNameFocus}
             onBlur={handleNameBlur}
+            onKeyDown={handleNameKeyDown}
             className={`text-xs h-6 w-[95%] text-center px-1 ${textColor} bg-transparent border-none focus:ring-1 focus:ring-white/50 mb-1`}
-            style={{ color: isLightBackground ? '#000' : '#fff' }}
+            style={{ 
+              color: textColor === 'text-white' ? '#fff' : '#000',
+              textShadow: textShadow
+            }}
           />
           <Input
             value={hexValue}
             onChange={handleHexChange}
             onFocus={handleHexFocus}
             onBlur={handleHexBlur}
+            onKeyDown={handleHexKeyDown}
             className={`text-xs h-6 w-[95%] text-center px-1 ${hexColor} bg-transparent border-none focus:ring-1 focus:ring-white/50`}
-            style={{ color: isLightBackground ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)' }}
+            style={{ 
+              color: hexColor === 'text-white/70' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)',
+              textShadow: textShadow
+            }}
           />
         </div>
       </div>
@@ -293,29 +376,36 @@ export function ContrastGrid({
           </div>
         )}
         
-        <Button onClick={exportToSVG} variant="outline" size="sm" className="shrink-0">
+        <Button 
+          onClick={exportToSVG} 
+          variant="outline" 
+          size="sm" 
+          className="shrink-0"
+          aria-label="Export contrast grid as SVG image"
+        >
           <Download className="w-4 h-4 mr-2" />
           Export SVG
         </Button>
       </div>
 
-      <div className="w-full">
+      <div className="w-full overflow-x-auto">
         <div 
           className="grid gap-2 mx-auto" 
           style={{ 
-            gridTemplateColumns: `repeat(${xRamp.stops.length + 1}, minmax(80px, 1fr))`
+            gridTemplateColumns: `repeat(${xRamp.stops.length + 1}, minmax(60px, 1fr))`
           }}
+          role="grid"
+          aria-label={`Contrast ratio matrix comparing ${xRamp.name} (horizontal) and ${yRamp.name} (vertical) color ramps`}
         >
           {/* Top-left empty cell */}
           <div 
             className="bg-white border border-gray-200 aspect-square" 
+            aria-label="Empty cell - top left corner"
           />
           
           {/* Top row - X ramp color swatches */}
           {xRamp.stops.map((stop, index) => {
-            const isLightBackground = getContrastRatio(stop.hex, '#000000') > getContrastRatio(stop.hex, '#ffffff');
-            const textColor = isLightBackground ? 'text-black' : 'text-white';
-            const hexColor = isLightBackground ? 'text-black/70' : 'text-white/70';
+            const { textColor, hexColor, textShadow } = getAccessibleTextColors(stop.hex);
             
             return (
               <EditableColorSwatch
@@ -323,9 +413,9 @@ export function ContrastGrid({
                 stop={stop}
                 rampId={xRamp.id}
                 stopIndex={index}
-                isLightBackground={isLightBackground}
                 textColor={textColor}
                 hexColor={hexColor}
+                textShadow={textShadow}
                 fontSizes={fontSizes}
                 padding={padding}
               />
@@ -334,9 +424,7 @@ export function ContrastGrid({
 
           {/* Left column and grid cells */}
           {yRamp.stops.map((rowStop) => {
-            const isLightBackground = getContrastRatio(rowStop.hex, '#000000') > getContrastRatio(rowStop.hex, '#ffffff');
-            const textColor = isLightBackground ? 'text-black' : 'text-white';
-            const hexColor = isLightBackground ? 'text-black/70' : 'text-white/70';
+            const { textColor, hexColor, textShadow } = getAccessibleTextColors(rowStop.hex);
             
             return (
               <React.Fragment key={`row-${rowStop.name}`}>
@@ -345,9 +433,9 @@ export function ContrastGrid({
                   stop={rowStop}
                   rampId={yRamp.id}
                   stopIndex={yRamp.stops.findIndex(s => s.name === rowStop.name)}
-                  isLightBackground={isLightBackground}
                   textColor={textColor}
                   hexColor={hexColor}
+                  textShadow={textShadow}
                   fontSizes={fontSizes}
                   padding={padding}
                 />
@@ -365,6 +453,8 @@ export function ContrastGrid({
                       style={{ 
                         backgroundColor: bgColor
                       }}
+                      role="gridcell"
+                      aria-label={`Contrast ratio between ${rowStop.name} (${rowStop.hex}) and ${colStop.name} (${colStop.hex}): ${formatContrastRatio(ratio)}`}
                     >
                       <div className={`text-center text-black ${fontSizes.ratio}`}>
                         {formatContrastRatio(ratio)}
