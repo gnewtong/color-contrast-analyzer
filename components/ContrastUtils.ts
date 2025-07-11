@@ -9,6 +9,7 @@ export interface ColorRamp {
   id: string;
   name: string;
   stops: ColorStop[];
+  lockedStops?: Set<number>; // Track which stops are locked (by index)
 }
 
 // Convert hex to RGB
@@ -82,20 +83,35 @@ export function getContrastLevelColor(level: string): string {
 // Default color ramps
 export const defaultColorRamps: ColorRamp[] = [
   {
-    id: 'gray',
-    name: 'Gray',
+    id: 'grayscale',
+    name: 'Grayscale',
     stops: [
-      { name: '050', hex: '#ffffff' },
-      { name: '100', hex: '#f6f6f6' },
-      { name: '200', hex: '#ebebeb' },
-      { name: '300', hex: '#cacaca' },
-      { name: '400', hex: '#919191' },
-      { name: '500', hex: '#7a7a7a' },
-      { name: '600', hex: '#6b6b6b' },
-      { name: '700', hex: '#565656' },
-      { name: '800', hex: '#434343' },
-      { name: '900', hex: '#2f2f2f' },
-      { name: '1000', hex: '#000000' }
-    ]
+      { name: '100', hex: '#f8f9fa' },
+      { name: '200', hex: '#e9ecef' },
+      { name: '300', hex: '#dee2e6' },
+      { name: '400', hex: '#ced4da' },
+      { name: '500', hex: '#adb5bd' },
+      { name: '600', hex: '#6c757d' },
+      { name: '700', hex: '#495057' },
+      { name: '800', hex: '#343a40' },
+      { name: '900', hex: '#212529' }
+    ],
+    lockedStops: new Set()
+  },
+  {
+    id: 'blue',
+    name: 'Blue',
+    stops: [
+      { name: '100', hex: '#cce7ff' },
+      { name: '200', hex: '#99cfff' },
+      { name: '300', hex: '#66b7ff' },
+      { name: '400', hex: '#339fff' },
+      { name: '500', hex: '#0087ff' },
+      { name: '600', hex: '#0066cc' },
+      { name: '700', hex: '#004499' },
+      { name: '800', hex: '#002266' },
+      { name: '900', hex: '#001133' }
+    ],
+    lockedStops: new Set()
   }
 ];

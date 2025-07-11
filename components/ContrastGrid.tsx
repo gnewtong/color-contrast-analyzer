@@ -4,7 +4,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Download } from 'lucide-react';
+import { Download, Lock, Unlock } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { Badge } from './ui/badge';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 
 interface ContrastGridProps {
   colorRamps: ColorRamp[];
@@ -13,6 +16,16 @@ interface ContrastGridProps {
   onXRampChange?: (rampId: string) => void;
   onYRampChange?: (rampId: string) => void;
   onColorRampsChange?: (ramps: ColorRamp[]) => void;
+}
+
+interface ContrastAdjustmentOption {
+  type: 'x-only' | 'y-only' | 'both';
+  xColor?: string;
+  yColor?: string;
+  newContrastRatio: number;
+  description: string;
+  isPossible: boolean;
+  reason?: string;
 }
 
 export function ContrastGrid({ 
@@ -24,6 +37,28 @@ export function ContrastGrid({
   onColorRampsChange
 }: ContrastGridProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [adjustmentDialogOpen, setAdjustmentDialogOpen] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<{
+    xColor: string;
+    yColor: string;
+    xRampId: string;
+    yRampId: string;
+    xStopIndex: number;
+    yStopIndex: number;
+    currentRatio: number;
+  } | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<'AA_LARGE' | 'AA' | 'AAA'>('AA');
+  const [adjustmentOptions, setAdjustmentOptions] = useState<ContrastAdjustmentOption[]>([]);
+  // Add state for lock warning dialog
+  const [lockWarningOpen, setLockWarningOpen] = useState(false);
+  const [lockedStops, setLockedStops] = useState<string[]>([]);
+
+  // Regenerate adjustment options when target changes
+  useEffect(() => {
+    if (selectedCell) {
+      generateAdjustmentOptions();
+    }
+  }, [selectedTarget, selectedCell]);
 
   // Hex color validation
   const isValidHexColor = (color: string): boolean => {
@@ -187,6 +222,360 @@ export function ContrastGrid({
     URL.revokeObjectURL(url);
   };
 
+  const handleCellClick = (xColor: string, yColor: string, xRampId: string, yRampId: string, xStopIndex: number, yStopIndex: number) => {
+    // Check for locked stops before opening adjustment dialog
+    const xRamp = colorRamps.find(r => r.id === xRampId);
+    const yRamp = colorRamps.find(r => r.id === yRampId);
+    const locked: string[] = [];
+    if (xRamp?.lockedStops?.has(xStopIndex)) {
+      locked.push(xRamp.stops[xStopIndex]?.name || 'X');
+    }
+    if (yRamp?.lockedStops?.has(yStopIndex)) {
+      locked.push(yRamp.stops[yStopIndex]?.name || 'Y');
+    }
+    if (locked.length > 0) {
+      setLockedStops(locked);
+      setLockWarningOpen(true);
+      return;
+    }
+    const currentRatio = getContrastRatio(xColor, yColor);
+    setSelectedCell({
+      xColor,
+      yColor,
+      xRampId,
+      yRampId,
+      xStopIndex,
+      yStopIndex,
+      currentRatio
+    });
+    setSelectedTarget('AA'); // Reset to AA when dialog opens
+    setAdjustmentDialogOpen(true);
+    // Generate options will be called by useEffect when selectedCell changes
+  };
+
+  const generateAdjustmentOptions = () => {
+    if (!selectedCell) return;
+
+    const targetRatio = selectedTarget === 'AA_LARGE' ? 3.0 : selectedTarget === 'AA' ? 4.5 : 7.0;
+    const options: ContrastAdjustmentOption[] = [];
+
+    // Get stop names and ramps
+    const xRamp = colorRamps.find(r => r.id === selectedCell.xRampId);
+    const yRamp = colorRamps.find(r => r.id === selectedCell.yRampId);
+    const xStopName = xRamp?.stops[selectedCell.xStopIndex]?.name || 'X';
+    const yStopName = yRamp?.stops[selectedCell.yStopIndex]?.name || 'Y';
+    const xCurrent = selectedCell.xColor.toLowerCase();
+    const yCurrent = selectedCell.yColor.toLowerCase();
+
+    // Determine which is lighter and darker
+    let lighterIdx = getLuminance(xCurrent) > getLuminance(yCurrent) ? 'x' : 'y';
+    let darkerIdx = lighterIdx === 'x' ? 'y' : 'x';
+    let lighterColor = lighterIdx === 'x' ? xCurrent : yCurrent;
+    let darkerColor = darkerIdx === 'x' ? xCurrent : yCurrent;
+    let lighterStopName = lighterIdx === 'x' ? xStopName : yStopName;
+    let darkerStopName = darkerIdx === 'x' ? xStopName : yStopName;
+
+    // Option 1: Adjust lighter stop only
+    const lighterAdjusted = adjustColorToContrast(lighterColor, darkerColor, targetRatio).toLowerCase();
+    const lighterChanged = lighterAdjusted !== lighterColor;
+    const lighterRatio = getContrastRatio(lighterAdjusted, darkerColor);
+    
+    options.push({
+      type: lighterIdx === 'x' ? 'x-only' : 'y-only',
+      xColor: lighterIdx === 'x' ? lighterAdjusted : xCurrent,
+      yColor: lighterIdx === 'y' ? lighterAdjusted : yCurrent,
+      newContrastRatio: lighterRatio,
+      description: `Adjust ${lighterStopName} to ${lighterAdjusted}`,
+      isPossible: lighterChanged && lighterRatio >= targetRatio,
+      reason: !lighterChanged || lighterRatio < targetRatio ? 'No lighter color can achieve the target contrast' : undefined
+    });
+
+    // Option 2: Adjust darker stop only
+    const darkerAdjusted = adjustColorToContrast(darkerColor, lighterColor, targetRatio).toLowerCase();
+    const darkerChanged = darkerAdjusted !== darkerColor;
+    const darkerRatio = getContrastRatio(lighterColor, darkerAdjusted);
+    
+    options.push({
+      type: darkerIdx === 'x' ? 'x-only' : 'y-only',
+      xColor: darkerIdx === 'x' ? darkerAdjusted : xCurrent,
+      yColor: darkerIdx === 'y' ? darkerAdjusted : yCurrent,
+      newContrastRatio: darkerRatio,
+      description: `Adjust ${darkerStopName} to ${darkerAdjusted}`,
+      isPossible: darkerChanged && darkerRatio >= targetRatio,
+      reason: !darkerChanged || darkerRatio < targetRatio ? 'No darker color can achieve the target contrast' : undefined
+    });
+
+    // Option 3: Adjust both stops (middleground)
+    const lighterLab = hexToLab(lighterColor);
+    const darkerLab = hexToLab(darkerColor);
+    let t = 0.5;
+    let found = false;
+    let bestLighter = lighterColor;
+    let bestDarker = darkerColor;
+    
+    for (let i = 0; i <= 100; i++) {
+      // Interpolate both toward midpoint, then move apart
+      const midL = (lighterLab.l + darkerLab.l) / 2;
+      const lighterNewLab = { ...lighterLab, l: midL + t * (lighterLab.l - midL) };
+      const darkerNewLab = { ...darkerLab, l: midL - t * (midL - darkerLab.l) };
+      const lighterHex = labToHex(lighterNewLab).toLowerCase();
+      const darkerHex = labToHex(darkerNewLab).toLowerCase();
+      const ratio = getContrastRatio(lighterHex, darkerHex);
+      if (ratio >= targetRatio) {
+        bestLighter = lighterHex;
+        bestDarker = darkerHex;
+        found = true;
+        break;
+      }
+      t += 0.01;
+    }
+    
+    const bothChanged = bestLighter !== lighterColor || bestDarker !== darkerColor;
+    const bothRatio = getContrastRatio(bestLighter, bestDarker);
+    
+    options.push({
+      type: 'both',
+      xColor: lighterIdx === 'x' ? bestLighter : bestDarker,
+      yColor: lighterIdx === 'y' ? bestLighter : bestDarker,
+      newContrastRatio: bothRatio,
+      description: `Adjust ${xStopName} to ${lighterIdx === 'x' ? bestLighter : bestDarker}, ${yStopName} to ${lighterIdx === 'y' ? bestLighter : bestDarker}`,
+      isPossible: found && bothChanged && bothRatio >= targetRatio,
+      reason: !found || !bothChanged || bothRatio < targetRatio ? 'Cannot reach target by adjusting both stops' : undefined
+    });
+
+    setAdjustmentOptions(options);
+  };
+
+  // Helper for readable text color
+  const getReadableTextColor = (hex: string) => {
+    const rgb = hexToRgb(hex);
+    // Calculate luminance
+    const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+    return luminance > 0.5 ? '#222' : '#fff';
+  };
+
+  const applyAdjustment = (option: ContrastAdjustmentOption) => {
+    if (!selectedCell || !onColorRampsChange) return;
+
+    // Check if any stop being adjusted is locked
+    const xRamp = colorRamps.find(r => r.id === selectedCell.xRampId);
+    const yRamp = colorRamps.find(r => r.id === selectedCell.yRampId);
+    const locked: string[] = [];
+    if (option.xColor && xRamp?.lockedStops?.has(selectedCell.xStopIndex)) {
+      locked.push(xRamp.stops[selectedCell.xStopIndex]?.name || 'X');
+    }
+    if (option.yColor && yRamp?.lockedStops?.has(selectedCell.yStopIndex)) {
+      locked.push(yRamp.stops[selectedCell.yStopIndex]?.name || 'Y');
+    }
+    if (locked.length > 0) {
+      setLockedStops(locked);
+      setLockWarningOpen(true);
+      return;
+    }
+
+    const updatedRamps = [...colorRamps];
+
+    if (option.xColor) {
+      const xRampIndex = updatedRamps.findIndex(r => r.id === selectedCell.xRampId);
+      if (xRampIndex !== -1) {
+        updatedRamps[xRampIndex] = {
+          ...updatedRamps[xRampIndex],
+          stops: updatedRamps[xRampIndex].stops.map((stop, index) =>
+            index === selectedCell.xStopIndex ? { ...stop, hex: option.xColor! } : stop
+          )
+        };
+      }
+    }
+
+    if (option.yColor) {
+      const yRampIndex = updatedRamps.findIndex(r => r.id === selectedCell.yRampId);
+      if (yRampIndex !== -1) {
+        updatedRamps[yRampIndex] = {
+          ...updatedRamps[yRampIndex],
+          stops: updatedRamps[yRampIndex].stops.map((stop, index) =>
+            index === selectedCell.yStopIndex ? { ...stop, hex: option.yColor! } : stop
+          )
+        };
+      }
+    }
+
+    onColorRampsChange(updatedRamps);
+    setAdjustmentDialogOpen(false);
+    setSelectedCell(null);
+  };
+
+  // Color adjustment utility functions
+  const adjustColorToContrast = (color: string, backgroundColor: string, targetRatio: number): string => {
+    const currentRatio = getContrastRatio(color, backgroundColor);
+    
+    if (currentRatio >= targetRatio) {
+      return color; // Already meets target
+    }
+
+    // Convert to LAB for better color adjustments
+    const colorLab = hexToLab(color);
+    const bgLab = hexToLab(backgroundColor);
+    
+    // Try adjusting lightness first (most common approach)
+    let adjustedLab = { ...colorLab };
+    let step = 0.1;
+    let attempts = 0;
+    const maxAttempts = 50;
+
+    while (attempts < maxAttempts) {
+      const testColor = labToHex(adjustedLab);
+      const testRatio = getContrastRatio(testColor, backgroundColor);
+      
+      if (testRatio >= targetRatio) {
+        return testColor;
+      }
+      
+      // Adjust lightness based on whether we need more or less contrast
+      if (testRatio < targetRatio) {
+        // Need more contrast - make color darker if background is light, lighter if background is dark
+        const bgLuminance = getLuminance(backgroundColor);
+        if (bgLuminance > 0.5) {
+          adjustedLab.l = Math.max(0, adjustedLab.l - step);
+        } else {
+          adjustedLab.l = Math.min(100, adjustedLab.l + step);
+        }
+      }
+      
+      step *= 1.1; // Increase step size for faster convergence
+      attempts++;
+    }
+
+    return color; // Fallback to original if we can't achieve target
+  };
+
+  const hexToLab = (hex: string) => {
+    const rgb = hexToRgb(hex);
+    return rgbToLab(rgb);
+  };
+
+  const labToHex = (lab: {l: number, a: number, b: number}) => {
+    const rgb = labToRgb(lab);
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
+  };
+
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  };
+
+  const rgbToHex = (r: number, g: number, b: number) => {
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+  };
+
+  const rgbToLab = (rgb: {r: number, g: number, b: number}) => {
+    const xyz = rgbToXyz(rgb);
+    return xyzToLab(xyz);
+  };
+
+  const labToRgb = (lab: {l: number, a: number, b: number}) => {
+    const xyz = labToXyz(lab);
+    return xyzToRgb(xyz);
+  };
+
+  const rgbToXyz = (rgb: {r: number, g: number, b: number}) => {
+    let r = rgb.r / 255;
+    let g = rgb.g / 255;
+    let b = rgb.b / 255;
+
+    r = r > 0.04045 ? Math.pow((r + 0.055) / 1.055, 2.4) : r / 12.92;
+    g = g > 0.04045 ? Math.pow((g + 0.055) / 1.055, 2.4) : g / 12.92;
+    b = b > 0.04045 ? Math.pow((b + 0.055) / 1.055, 2.4) : b / 12.92;
+
+    r *= 100;
+    g *= 100;
+    b *= 100;
+
+    const x = r * 0.4124 + g * 0.3576 + b * 0.1805;
+    const y = r * 0.2126 + g * 0.7152 + b * 0.0722;
+    const z = r * 0.0193 + g * 0.1192 + b * 0.9505;
+
+    return { x, y, z };
+  };
+
+  const xyzToLab = (xyz: {x: number, y: number, z: number}) => {
+    const xn = 95.047;
+    const yn = 100.000;
+    const zn = 108.883;
+
+    let x = xyz.x / xn;
+    let y = xyz.y / yn;
+    let z = xyz.z / zn;
+
+    x = x > 0.008856 ? Math.pow(x, 1/3) : (7.787 * x) + (16 / 116);
+    y = y > 0.008856 ? Math.pow(y, 1/3) : (7.787 * y) + (16 / 116);
+    z = z > 0.008856 ? Math.pow(z, 1/3) : (7.787 * z) + (16 / 116);
+
+    const l = (116 * y) - 16;
+    const a = 500 * (x - y);
+    const b = 200 * (y - z);
+
+    return { l, a, b };
+  };
+
+  const labToXyz = (lab: {l: number, a: number, b: number}) => {
+    let y = (lab.l + 16) / 116;
+    let x = lab.a / 500 + y;
+    let z = y - lab.b / 200;
+
+    x = x > 0.2069 ? Math.pow(x, 3) : (x - 16 / 116) / 7.787;
+    y = y > 0.2069 ? Math.pow(y, 3) : (y - 16 / 116) / 7.787;
+    z = z > 0.2069 ? Math.pow(z, 3) : (z - 16 / 116) / 7.787;
+
+    const xn = 95.047;
+    const yn = 100.000;
+    const zn = 108.883;
+
+    return {
+      x: x * xn,
+      y: y * yn,
+      z: z * zn
+    };
+  };
+
+  const xyzToRgb = (xyz: {x: number, y: number, z: number}) => {
+    let x = xyz.x / 100;
+    let y = xyz.y / 100;
+    let z = xyz.z / 100;
+
+    let r = x * 3.2406 + y * -1.5372 + z * -0.4986;
+    let g = x * -0.9689 + y * 1.8758 + z * 0.0415;
+    let b = x * 0.0557 + y * -0.2040 + z * 1.0570;
+
+    r = r > 0.0031308 ? 1.055 * Math.pow(r, 1/2.4) - 0.055 : 12.92 * r;
+    g = g > 0.0031308 ? 1.055 * Math.pow(g, 1/2.4) - 0.055 : 12.92 * g;
+    b = b > 0.0031308 ? 1.055 * Math.pow(b, 1/2.4) - 0.055 : 12.92 * b;
+
+    return {
+      r: Math.max(0, Math.min(255, Math.round(r * 255))),
+      g: Math.max(0, Math.min(255, Math.round(g * 255))),
+      b: Math.max(0, Math.min(255, Math.round(b * 255)))
+    };
+  };
+
+  const getLuminance = (color: string) => {
+    const rgb = hexToRgb(color);
+    const [rs, gs, bs] = [rgb.r, rgb.g, rgb.b].map(c => {
+      c = c / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+  };
+
+  useEffect(() => {
+    if (adjustmentDialogOpen && selectedCell) {
+      generateAdjustmentOptions();
+    }
+  }, [adjustmentDialogOpen, selectedCell, selectedTarget]);
+
   if (colorRamps.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-gray-500">
@@ -211,6 +600,24 @@ export function ContrastGrid({
 
   const padding = getPadding();
 
+  // Add this function inside the ContrastGrid component
+  const toggleLockedStop = (rampId: string, stopIndex: number) => {
+    if (!onColorRampsChange) return;
+    const updatedRamps = colorRamps.map(ramp => {
+      if (ramp.id === rampId) {
+        const lockedStops = new Set(ramp.lockedStops || []);
+        if (lockedStops.has(stopIndex)) {
+          lockedStops.delete(stopIndex);
+        } else {
+          lockedStops.add(stopIndex);
+        }
+        return { ...ramp, lockedStops };
+      }
+      return ramp;
+    });
+    onColorRampsChange(updatedRamps);
+  };
+
   // Editable Color Swatch Component
   const EditableColorSwatch = React.memo(({ 
     stop, 
@@ -220,7 +627,9 @@ export function ContrastGrid({
     hexColor, 
     textShadow, 
     fontSizes, 
-    padding
+    padding,
+    isLocked = false,
+    onToggleLock
   }: {
     stop: { name: string; hex: string };
     rampId: string;
@@ -230,6 +639,8 @@ export function ContrastGrid({
     textShadow: string;
     fontSizes: { name: string; hex: string };
     padding: string;
+    isLocked?: boolean;
+    onToggleLock?: (rampId: string, stopIndex: number) => void;
   }) => {
     const [nameValue, setNameValue] = useState(stop.name);
     const [hexValue, setHexValue] = useState(stop.hex);
@@ -307,6 +718,19 @@ export function ContrastGrid({
           backgroundColor: stop.hex
         }}
       >
+        <button
+          type="button"
+          className={`absolute top-1 right-1 rounded-full p-0.5 z-10 ${isLocked ? 'bg-blue-500' : ''}`}
+          aria-label={isLocked ? 'Unlock color stop' : 'Lock color stop'}
+          onClick={e => {
+            e.stopPropagation();
+            if (onToggleLock) onToggleLock(rampId, stopIndex);
+          }}
+          tabIndex={0}
+          style={{ background: isLocked ? undefined : 'transparent' }}
+        >
+          {isLocked ? <Lock className="w-3 h-3 text-white" /> : <Unlock className="w-3 h-3 text-gray-400" />}
+        </button>
         <div className={`text-center leading-tight ${fontSizes.name} w-full h-full flex flex-col justify-center items-center`}>
           <Input
             value={nameValue}
@@ -331,6 +755,8 @@ export function ContrastGrid({
               color: hexColor === 'text-white/70' ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.7)',
               textShadow: textShadow
             }}
+            disabled={isLocked}
+            readOnly={isLocked}
           />
         </div>
       </div>
@@ -345,10 +771,10 @@ export function ContrastGrid({
             <div className="space-y-2">
               <Label htmlFor="x-ramp-select">Horizontal Axis (X)</Label>
               <Select value={xRamp.id} onValueChange={onXRampChange}>
-                <SelectTrigger className="w-40" id="x-ramp-select">
+                <SelectTrigger id="x-ramp-select" className="min-w-0 w-auto max-w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start" className="min-w-fit">
                   {colorRamps.map((ramp) => (
                     <SelectItem key={ramp.id} value={ramp.id}>
                       {ramp.name}
@@ -361,10 +787,10 @@ export function ContrastGrid({
             <div className="space-y-2">
               <Label htmlFor="y-ramp-select">Vertical Axis (Y)</Label>
               <Select value={yRamp.id} onValueChange={onYRampChange}>
-                <SelectTrigger className="w-40" id="y-ramp-select">
+                <SelectTrigger id="y-ramp-select" className="min-w-0 w-auto max-w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent align="start" className="min-w-fit">
                   {colorRamps.map((ramp) => (
                     <SelectItem key={ramp.id} value={ramp.id}>
                       {ramp.name}
@@ -406,6 +832,7 @@ export function ContrastGrid({
           {/* Top row - X ramp color swatches */}
           {xRamp.stops.map((stop, index) => {
             const { textColor, hexColor, textShadow } = getAccessibleTextColors(stop.hex);
+            const isLocked = xRamp.lockedStops?.has(index) || false;
             
             return (
               <EditableColorSwatch
@@ -418,6 +845,8 @@ export function ContrastGrid({
                 textShadow={textShadow}
                 fontSizes={fontSizes}
                 padding={padding}
+                isLocked={isLocked}
+                onToggleLock={toggleLockedStop}
               />
             );
           })}
@@ -425,6 +854,8 @@ export function ContrastGrid({
           {/* Left column and grid cells */}
           {yRamp.stops.map((rowStop) => {
             const { textColor, hexColor, textShadow } = getAccessibleTextColors(rowStop.hex);
+            const stopIndex = yRamp.stops.findIndex(s => s.name === rowStop.name);
+            const isLocked = yRamp.lockedStops?.has(stopIndex) || false;
             
             return (
               <React.Fragment key={`row-${rowStop.name}`}>
@@ -432,12 +863,14 @@ export function ContrastGrid({
                 <EditableColorSwatch
                   stop={rowStop}
                   rampId={yRamp.id}
-                  stopIndex={yRamp.stops.findIndex(s => s.name === rowStop.name)}
+                  stopIndex={stopIndex}
                   textColor={textColor}
                   hexColor={hexColor}
                   textShadow={textShadow}
                   fontSizes={fontSizes}
                   padding={padding}
+                  isLocked={isLocked}
+                  onToggleLock={toggleLockedStop}
                 />
                 
                 {/* Grid cells - contrast ratios */}
@@ -449,12 +882,20 @@ export function ContrastGrid({
                   return (
                     <div
                       key={`cell-${rowStop.name}-${colStop.name}`}
-                      className={`border border-gray-200 flex items-center justify-center ${padding} aspect-square`}
+                      className={`border border-gray-200 flex items-center justify-center ${padding} aspect-square cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all`}
                       style={{ 
                         backgroundColor: bgColor
                       }}
                       role="gridcell"
                       aria-label={`Contrast ratio between ${rowStop.name} (${rowStop.hex}) and ${colStop.name} (${colStop.hex}): ${formatContrastRatio(ratio)}`}
+                      onClick={() => handleCellClick(
+                        rowStop.hex, 
+                        colStop.hex, 
+                        yRamp.id, 
+                        xRamp.id, 
+                        yRamp.stops.findIndex(s => s.name === rowStop.name),
+                        xRamp.stops.findIndex(s => s.name === colStop.name)
+                      )}
                     >
                       <div className={`text-center text-black ${fontSizes.ratio}`}>
                         {formatContrastRatio(ratio)}
@@ -467,6 +908,122 @@ export function ContrastGrid({
           })}
         </div>
       </div>
+
+      {/* Contrast Adjustment Dialog */}
+      <Dialog open={adjustmentDialogOpen} onOpenChange={setAdjustmentDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adjust Contrast Ratio</DialogTitle>
+          </DialogHeader>
+          
+          {selectedCell && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Current Ratio: {formatContrastRatio(selectedCell.currentRatio)}</Label>
+                <div className="space-y-2">
+                  <div className="text-sm font-medium mb-1">Target Level</div>
+                  <RadioGroup value={selectedTarget} onValueChange={(value) => setSelectedTarget(value as 'AA_LARGE' | 'AA' | 'AAA')}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="AA_LARGE" id="target-aa-large" />
+                      <Label htmlFor="target-aa-large">AA Large (≥3:1)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="AA" id="target-aa" />
+                      <Label htmlFor="target-aa">AA (≥4.5:1)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="AAA" id="target-aaa" />
+                      <Label htmlFor="target-aaa">AAA (≥7:1)</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Adjustment Options</Label>
+                {adjustmentOptions.map((option, index) => {
+                  const xRamp = colorRamps.find(r => r.id === selectedCell.xRampId);
+                  const yRamp = colorRamps.find(r => r.id === selectedCell.yRampId);
+                  const xStopName = xRamp?.stops[selectedCell.xStopIndex]?.name || 'X';
+                  const yStopName = yRamp?.stops[selectedCell.yStopIndex]?.name || 'Y';
+                  const xBefore = selectedCell.xColor.toLowerCase();
+                  const yBefore = selectedCell.yColor.toLowerCase();
+                  const xAfter = option.xColor || xBefore;
+                  const yAfter = option.yColor || yBefore;
+                  const isBoth = option.type === 'both';
+                  const isXOnly = option.type === 'x-only';
+                  const isYOnly = option.type === 'y-only';
+                  return (
+                    <div 
+                      key={index} 
+                      className={`p-3 border rounded-lg ${option.isPossible ? 'hover:bg-gray-50 cursor-pointer' : 'opacity-60 cursor-not-allowed bg-gray-50'}`} 
+                      onClick={() => option.isPossible && applyAdjustment(option)}
+                    >
+                      <div className="flex items-center justify-between mb-2 gap-2">
+                        {/* X stop preview */}
+                        {(isBoth || isXOnly) && (
+                          <div className="flex items-center gap-1">
+                            <div className="flex flex-col items-center">
+                              <div className="text-xs mb-0.5">{xStopName}</div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-12 h-7 rounded border flex items-center justify-center text-xs font-mono" style={{ backgroundColor: xBefore, color: getReadableTextColor(xBefore) }}>{xBefore}</div>
+                                <span className="mx-1">→</span>
+                                <div className="w-12 h-7 rounded border flex items-center justify-center text-xs font-mono" style={{ backgroundColor: xAfter, color: getReadableTextColor(xAfter) }}>{xAfter}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {/* Y stop preview */}
+                        {(isBoth || isYOnly) && (
+                          <div className="flex items-center gap-1">
+                            <div className="flex flex-col items-center">
+                              <div className="text-xs mb-0.5">{yStopName}</div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-12 h-7 rounded border flex items-center justify-center text-xs font-mono" style={{ backgroundColor: yBefore, color: getReadableTextColor(yBefore) }}>{yBefore}</div>
+                                <span className="mx-1">→</span>
+                                <div className="w-12 h-7 rounded border flex items-center justify-center text-xs font-mono" style={{ backgroundColor: yAfter, color: getReadableTextColor(yAfter) }}>{yAfter}</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <Badge variant={option.newContrastRatio >= (selectedTarget === 'AA_LARGE' ? 3.0 : selectedTarget === 'AA' ? 4.5 : 7.0) ? 'default' : 'secondary'}>
+                          {formatContrastRatio(option.newContrastRatio)}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-gray-600">{option.description}</div>
+                      {!option.isPossible && option.reason && (
+                        <div className="text-xs text-red-600 mt-1 italic">{option.reason}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lock Warning Dialog */}
+      <Dialog open={lockWarningOpen} onOpenChange={setLockWarningOpen}>
+        <DialogContent className="max-w-xs">
+          <DialogHeader>
+            <DialogTitle>Unlock Required</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 text-sm">
+            {lockedStops.length === 1
+              ? `You must unlock stop "${lockedStops[0]}" before making this adjustment.`
+              : `You must unlock these stops before making this adjustment:`}
+            {lockedStops.length > 1 && (
+              <ul className="list-disc ml-5 mt-2">
+                {lockedStops.map(name => <li key={name}>{name}</li>)}
+              </ul>
+            )}
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => setLockWarningOpen(false)}>OK</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

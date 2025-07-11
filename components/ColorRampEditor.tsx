@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { ColorRampPasteDialog } from './ColorRampPasteDialog';
-import { Plus, Trash2, Upload, Download, Copy } from 'lucide-react';
+import { Plus, Trash2, Upload, Download, Copy, Edit3, Lock, Unlock } from 'lucide-react';
 
 interface ColorRampEditorProps {
   colorRamps: ColorRamp[];
@@ -161,6 +161,29 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
     }
   };
 
+  const toggleLockedStop = (rampId: string, stopIndex: number) => {
+    const ramp = colorRamps.find(r => r.id === rampId);
+    if (!ramp) return;
+
+    const lockedStops = new Set(ramp.lockedStops || []);
+    if (lockedStops.has(stopIndex)) {
+      lockedStops.delete(stopIndex);
+    } else {
+      lockedStops.add(stopIndex);
+    }
+
+    onColorRampsChange(
+      colorRamps.map(r =>
+        r.id === rampId ? { ...r, lockedStops } : r
+      )
+    );
+  };
+
+  const isStopLocked = (rampId: string, stopIndex: number) => {
+    const ramp = colorRamps.find(r => r.id === rampId);
+    return ramp?.lockedStops?.has(stopIndex) || false;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -243,62 +266,84 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange }: ColorRampEdi
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {ramp.stops.map((stop, stopIndex) => (
-                <div key={stopIndex} className="flex items-center gap-3">
-                  <div
-                    className="w-8 h-8 rounded border border-gray-300"
-                    style={{ backgroundColor: stop.hex }}
-                    aria-label={`Color swatch for ${stop.name}: ${stop.hex}`}
-                    role="img"
-                  />
-                  
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor={`name-${ramp.id}-${stopIndex}`} className="text-xs">Name</Label>
-                      <Input
-                        id={`name-${ramp.id}-${stopIndex}`}
-                        value={editingStates[`${ramp.id}-${stopIndex}`]?.name ?? stop.name}
-                        onChange={(e) => handleStopChange(ramp.id, stopIndex, 'name', e.target.value)}
-                        onBlur={() => handleStopBlur(ramp.id, stopIndex, 'name')}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        className="h-8 w-20"
-                      />
+              {ramp.stops.map((stop, stopIndex) => {
+                const isLocked = isStopLocked(ramp.id, stopIndex);
+                return (
+                  <div key={stopIndex} className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded border border-gray-300 relative"
+                      style={{ backgroundColor: stop.hex }}
+                      aria-label={`Color swatch for ${stop.name}: ${stop.hex}`}
+                      role="img"
+                    >
+                      {isLocked && (
+                        <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full p-0.5">
+                          <Lock className="w-3 h-3" />
+                        </div>
+                      )}
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <Label htmlFor={`hex-${ramp.id}-${stopIndex}`} className="text-xs">Hex</Label>
-                      <Input
-                        id={`hex-${ramp.id}-${stopIndex}`}
-                        value={editingStates[`${ramp.id}-${stopIndex}`]?.hex ?? stop.hex}
-                        onChange={(e) => handleStopChange(ramp.id, stopIndex, 'hex', e.target.value)}
-                        onBlur={() => handleStopBlur(ramp.id, stopIndex, 'hex')}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            e.currentTarget.blur();
-                          }
-                        }}
-                        className="h-8 w-24"
-                        placeholder="#000000"
-                      />
+                    
+                    <div className="flex items-center gap-2 flex-1">
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor={`name-${ramp.id}-${stopIndex}`} className="text-xs">Name</Label>
+                        <Input
+                          id={`name-${ramp.id}-${stopIndex}`}
+                          value={editingStates[`${ramp.id}-${stopIndex}`]?.name ?? stop.name}
+                          onChange={(e) => handleStopChange(ramp.id, stopIndex, 'name', e.target.value)}
+                          onBlur={() => handleStopBlur(ramp.id, stopIndex, 'name')}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className="h-8 w-20"
+                          disabled={isLocked}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor={`hex-${ramp.id}-${stopIndex}`} className="text-xs">Hex</Label>
+                        <Input
+                          id={`hex-${ramp.id}-${stopIndex}`}
+                          value={editingStates[`${ramp.id}-${stopIndex}`]?.hex ?? stop.hex}
+                          onChange={(e) => handleStopChange(ramp.id, stopIndex, 'hex', e.target.value)}
+                          onBlur={() => handleStopBlur(ramp.id, stopIndex, 'hex')}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              e.currentTarget.blur();
+                            }
+                          }}
+                          className="h-8 w-24"
+                          placeholder="#000000"
+                          disabled={isLocked}
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => toggleLockedStop(ramp.id, stopIndex)}
+                        title={isLocked ? "Unlock color stop" : "Lock color stop"}
+                        aria-label={`${isLocked ? 'Unlock' : 'Lock'} color stop ${stop.name}`}
+                      >
+                        {isLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeColorStop(ramp.id, stopIndex)}
+                        disabled={ramp.stops.length <= 1}
+                        aria-label={`Remove color stop ${stop.name} from ${ramp.name}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => removeColorStop(ramp.id, stopIndex)}
-                    disabled={ramp.stops.length <= 1}
-                    aria-label={`Remove color stop ${stop.name} from ${ramp.name}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
               
               <Button
                 size="sm"
