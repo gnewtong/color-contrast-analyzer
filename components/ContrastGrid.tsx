@@ -4,7 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Download, Lock, Unlock } from 'lucide-react';
+import { Download, Lock, Unlock, Copy } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Badge } from './ui/badge';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
@@ -52,6 +53,8 @@ export function ContrastGrid({
   // Add state for lock warning dialog
   const [lockWarningOpen, setLockWarningOpen] = useState(false);
   const [lockedStops, setLockedStops] = useState<string[]>([]);
+  const [showToast, setShowToast] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // Regenerate adjustment options when target changes
   useEffect(() => {
@@ -220,6 +223,73 @@ export function ContrastGrid({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const copyToClipboard = async () => {
+    if (!xRamp || !yRamp) return;
+
+    const gridSize = 100; // Fixed size for copy
+    const gap = 2;
+    const totalWidth = (xRamp.stops.length + 1) * gridSize + xRamp.stops.length * gap;
+    const totalHeight = (yRamp.stops.length + 1) * gridSize + yRamp.stops.length * gap;
+
+    let svgContent = `<svg width="${totalWidth}" height="${totalHeight}" xmlns="http://www.w3.org/2000/svg">`;
+    
+    // Add styles
+    const nameSize = gridSize >= 100 ? '14' : gridSize >= 80 ? '12' : '10';
+    const hexSize = gridSize >= 100 ? '11' : gridSize >= 80 ? '10' : '9';
+    const ratioSize = gridSize >= 100 ? '14' : gridSize >= 80 ? '12' : '10';
+    
+    svgContent += `<defs><style>
+      .color-name { font-family: system-ui, -apple-system, sans-serif; font-size: ${nameSize}px; font-weight: 500; }
+      .color-hex { font-family: system-ui, -apple-system, sans-serif; font-size: ${hexSize}px; opacity: 0.7; }
+      .contrast-ratio { font-family: system-ui, -apple-system, sans-serif; font-size: ${ratioSize}px; fill: black; }
+    </style></defs>`;
+
+    // Top-left empty cell
+    svgContent += `<rect x="0" y="0" width="${gridSize}" height="${gridSize}" fill="white" stroke="#d1d5db" stroke-width="1"/>`;
+
+    // Top row - X ramp headers
+    xRamp.stops.forEach((stop, i) => {
+      const x = (i + 1) * (gridSize + gap);
+      const textColor = getContrastRatio(stop.hex, '#000000') > getContrastRatio(stop.hex, '#ffffff') ? 'black' : 'white';
+      
+      svgContent += `<rect x="${x}" y="0" width="${gridSize}" height="${gridSize}" fill="${stop.hex}" stroke="#d1d5db" stroke-width="1"/>`;
+      svgContent += `<text x="${x + gridSize/2}" y="${gridSize - 20}" text-anchor="middle" class="color-name" fill="${textColor}">${stop.name}</text>`;
+      svgContent += `<text x="${x + gridSize/2}" y="${gridSize - 6}" text-anchor="middle" class="color-hex" fill="${textColor}">${stop.hex}</text>`;
+    });
+
+    // Left column and grid cells
+    yRamp.stops.forEach((rowStop, i) => {
+      const y = (i + 1) * (gridSize + gap);
+      const textColor = getContrastRatio(rowStop.hex, '#000000') > getContrastRatio(rowStop.hex, '#ffffff') ? 'black' : 'white';
+      
+      // Left column header
+      svgContent += `<rect x="0" y="${y}" width="${gridSize}" height="${gridSize}" fill="${rowStop.hex}" stroke="#d1d5db" stroke-width="1"/>`;
+      svgContent += `<text x="${gridSize/2}" y="${y + gridSize - 20}" text-anchor="middle" class="color-name" fill="${textColor}">${rowStop.name}</text>`;
+      svgContent += `<text x="${gridSize/2}" y="${y + gridSize - 6}" text-anchor="middle" class="color-hex" fill="${textColor}">${rowStop.hex}</text>`;
+
+      // Grid cells
+      xRamp.stops.forEach((colStop, j) => {
+        const x = (j + 1) * (gridSize + gap);
+        const ratio = getContrastRatio(rowStop.hex, colStop.hex);
+        const level = getContrastLevel(ratio);
+        const bgColor = getContrastLevelColor(level);
+        
+        svgContent += `<rect x="${x}" y="${y}" width="${gridSize}" height="${gridSize}" fill="${bgColor}" stroke="#d1d5db" stroke-width="1"/>`;
+        svgContent += `<text x="${x + gridSize/2}" y="${y + gridSize/2 + 4}" text-anchor="middle" class="contrast-ratio">${formatContrastRatio(ratio)}</text>`;
+      });
+    });
+
+    svgContent += '</svg>';
+
+    try {
+      await navigator.clipboard.writeText(svgContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch (error) {
+      console.error('Failed to copy SVG to clipboard:', error);
+    }
   };
 
   const handleCellClick = (xColor: string, yColor: string, xRampId: string, yRampId: string, xStopIndex: number, yStopIndex: number) => {
@@ -802,16 +872,32 @@ export function ContrastGrid({
           </div>
         )}
         
-        <Button 
-          onClick={exportToSVG} 
-          variant="outline" 
-          size="sm" 
-          className="shrink-0"
-          aria-label="Export contrast grid as SVG image"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Export SVG
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={exportToSVG} 
+            variant="outline" 
+            size="sm" 
+            className="shrink-0"
+            aria-label="Export contrast grid as SVG image"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export SVG
+          </Button>
+          <Button
+            onClick={copyToClipboard}
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            aria-label="Copy contrast grid as SVG to clipboard"
+          >
+            {copied ? (
+              <Check className="w-4 h-4 mr-2 text-green-600" />
+            ) : (
+              <Copy className="w-4 h-4 mr-2" />
+            )}
+            {copied ? 'Copied!' : 'Copy SVG'}
+          </Button>
+        </div>
       </div>
 
       <div className="w-full overflow-x-auto">
@@ -1030,6 +1116,28 @@ export function ContrastGrid({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Custom Toast Notification */}
+      {showToast && (
+        <div style={{
+          position: 'fixed',
+          bottom: 24,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(30,41,59,0.95)',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          zIndex: 9999,
+          fontSize: 16,
+          fontWeight: 500,
+          pointerEvents: 'none',
+          transition: 'opacity 0.3s',
+        }}>
+          SVG copied to clipboard!
+        </div>
+      )}
     </div>
   );
 }
