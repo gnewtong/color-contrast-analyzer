@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { ColorRampPasteDialog } from './ColorRampPasteDialog';
-import { Plus, Trash2, Upload, Copy, Edit3, Lock, Unlock } from 'lucide-react';
+import { Plus, Trash2, Upload, Copy, Edit3, Lock, Unlock, Check } from 'lucide-react';
 
 interface ColorRampEditorProps {
   colorRamps: ColorRamp[];
@@ -15,6 +15,7 @@ interface ColorRampEditorProps {
 
 export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRamp }: ColorRampEditorProps) {
   const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
+  const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
   const [editingStates, setEditingStates] = useState<{ [key: string]: { name: string; hex: string } }>({});
 
   const addColorRamp = () => {
@@ -138,18 +139,15 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
   const copyColorRampAsJSON = async (ramp: ColorRamp) => {
     const buttonId = `json-${ramp.id}`;
     setLoadingStates(prev => ({ ...prev, [buttonId]: true }));
-    
     try {
       const data = {
         name: ramp.name,
         stops: ramp.stops.map(stop => ({ name: stop.name, hex: stop.hex }))
       };
-      
       const jsonText = JSON.stringify(data, null, 2);
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(jsonText);
       } else {
-        // Fallback for browsers without clipboard API
         const textArea = document.createElement('textarea');
         textArea.value = jsonText;
         document.body.appendChild(textArea);
@@ -157,6 +155,8 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
         document.execCommand('copy');
         document.body.removeChild(textArea);
       }
+      setCopiedStates(prev => ({ ...prev, [buttonId]: true }));
+      setTimeout(() => setCopiedStates(prev => ({ ...prev, [buttonId]: false })), 1500);
     } catch (error) {
       console.error('Failed to copy JSON:', error);
     } finally {
@@ -168,13 +168,11 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
   const copyHexValues = async (ramp: ColorRamp) => {
     const buttonId = `hex-${ramp.id}`;
     setLoadingStates(prev => ({ ...prev, [buttonId]: true }));
-    
     try {
       const hexValues = ramp.stops.map(stop => stop.hex).join('\n');
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(hexValues);
       } else {
-        // Fallback for browsers without clipboard API
         const textArea = document.createElement('textarea');
         textArea.value = hexValues;
         document.body.appendChild(textArea);
@@ -182,6 +180,8 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
         document.execCommand('copy');
         document.body.removeChild(textArea);
       }
+      setCopiedStates(prev => ({ ...prev, [buttonId]: true }));
+      setTimeout(() => setCopiedStates(prev => ({ ...prev, [buttonId]: false })), 1500);
     } catch (error) {
       console.error('Failed to copy HEX values:', error);
     } finally {
@@ -256,12 +256,12 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
                   disabled={loadingStates[`json-${ramp.id}`]}
                   className={loadingStates[`json-${ramp.id}`] ? 'loading' : ''}
                 >
-                  {loadingStates[`json-${ramp.id}`] ? (
-                    <div className="loading-spinner mr-1" />
-                  ) : (
-                    <Copy className="w-4 h-4 mr-1" />
-                  )}
-                  JSON
+                  {loadingStates[`json-${ramp.id}`]
+                    ? <div className="loading-spinner mr-1" />
+                    : copiedStates[`json-${ramp.id}`]
+                      ? <Check className="w-4 h-4 mr-1 text-green-600" />
+                      : <Copy className="w-4 h-4 mr-1" />}
+                  {copiedStates[`json-${ramp.id}`] ? 'Copied!' : 'JSON'}
                 </Button>
                 <Button
                   size="sm"
@@ -272,12 +272,12 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
                   disabled={loadingStates[`hex-${ramp.id}`]}
                   className={loadingStates[`hex-${ramp.id}`] ? 'loading' : ''}
                 >
-                  {loadingStates[`hex-${ramp.id}`] ? (
-                    <div className="loading-spinner mr-1" />
-                  ) : (
-                    <Copy className="w-4 h-4 mr-1" />
-                  )}
-                  HEX
+                  {loadingStates[`hex-${ramp.id}`]
+                    ? <div className="loading-spinner mr-1" />
+                    : copiedStates[`hex-${ramp.id}`]
+                      ? <Check className="w-4 h-4 mr-1 text-green-600" />
+                      : <Copy className="w-4 h-4 mr-1" />}
+                  {copiedStates[`hex-${ramp.id}`] ? 'Copied!' : 'HEX'}
                 </Button>
                 <Button
                   size="sm"
