@@ -353,49 +353,7 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
     }
   };
 
-  const copyDebugInfo = async () => {
-    try {
-      if (!rampResult.debugInfo) {
-        console.log('No debug info available');
-        return;
-      }
 
-      let debugText = '=== COLOR RAMP GENERATION DEBUG ===\n\n';
-      
-      // Algorithm steps
-      debugText += 'Algorithm Steps:\n';
-      rampResult.debugInfo.algorithmSteps.forEach(step => {
-        debugText += `• ${step}\n`;
-      });
-      debugText += '\n';
-      
-      // Warnings
-      if (rampResult.debugInfo.warnings.length > 0) {
-        debugText += 'Warnings:\n';
-        rampResult.debugInfo.warnings.forEach(warning => {
-          debugText += `⚠ ${warning}\n`;
-        });
-        debugText += '\n';
-      }
-      
-      // Color variations
-      debugText += 'Reference Color Variations:\n';
-      rampResult.debugInfo.variations.forEach(variation => {
-        debugText += `${variation.hex} | Ratio: ${variation.ratio.toFixed(2)} | L: ${variation.lightness.toFixed(0)}% | H: ${variation.hue.toFixed(0)}° | S: ${variation.saturation.toFixed(0)}%\n`;
-      });
-      debugText += '\n';
-      
-      // Generated colors
-      debugText += 'Generated Colors:\n';
-      rampResult.colors.forEach((color, index) => {
-        debugText += `Slot ${index + 1}: ${color.hex} | Target: ${color.targetRatio.toFixed(1)} | Actual: ${color.actualRatio.toFixed(1)} | Method: ${color.method}\n`;
-      });
-      
-      await navigator.clipboard.writeText(debugText);
-    } catch (error) {
-      console.error('Failed to copy debug info:', error);
-    }
-  };
 
 
 
@@ -641,10 +599,6 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
           <div className="flex items-center justify-between">
             <CardTitle>Generated Ramp</CardTitle>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={copyDebugInfo}>
-                <Copy className="w-4 h-4 mr-1" />
-                Copy Debug
-              </Button>
               <Button variant="outline" size="sm" onClick={copyHexValues}>
                 <Copy className="w-4 h-4 mr-1" />
                 Copy Hex
