@@ -1,7 +1,7 @@
 {
-  "name": "color-contrast-analyzer",
+  "name": "color-ramp-generator",
   "version": "1.0.0",
-  "description": "A tool for analyzing color contrast ratios for accessibility compliance",
+  "description": "A tool for generating and analyzing color ramps for design systems with accessibility in mind",
   "private": true,
   "type": "module",
   "scripts": {

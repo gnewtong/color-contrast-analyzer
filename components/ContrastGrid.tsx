@@ -4,11 +4,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from './ui/label';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Download, Lock, Unlock, Copy } from 'lucide-react';
-import { Check } from 'lucide-react';
+import { Download, Lock, Unlock, Copy, Check, Plus } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Badge } from './ui/badge';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { isValidHexColor, normalizeHex } from './hexUtils';
 
 interface ContrastGridProps {
   colorRamps: ColorRamp[];
@@ -62,12 +62,6 @@ export function ContrastGrid({
       generateAdjustmentOptions();
     }
   }, [selectedTarget, selectedCell]);
-
-  // Hex color validation
-  const isValidHexColor = (color: string): boolean => {
-    const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    return hexRegex.test(color);
-  };
 
   // Get accessible text colors with proper contrast calculation
   const getAccessibleTextColors = (backgroundColor: string) => {
@@ -688,6 +682,136 @@ export function ContrastGrid({
     onColorRampsChange(updatedRamps);
   };
 
+  // Add stop functions
+  const addStopBefore = (rampId: string, stopIndex: number) => {
+    if (!onColorRampsChange) return;
+    
+    const ramp = colorRamps.find(r => r.id === rampId);
+    if (!ramp) return;
+    
+    const currentStop = ramp.stops[stopIndex];
+    let newStop;
+
+    // Generate unique name
+    const existingNames = ramp.stops.map(s => s.name);
+    let counter = 1;
+    let newName = "New stop";
+    while (existingNames.includes(newName)) {
+      newName = `New stop ${counter}`;
+      counter++;
+    }
+
+    if (stopIndex === 0) {
+      // Add to beginning - make lighter
+      const rgb = hexToRgb(currentStop.hex);
+      const lighterRgb = {
+        r: Math.min(255, rgb.r + Math.round((255 - rgb.r) * 0.3)),
+        g: Math.min(255, rgb.g + Math.round((255 - rgb.g) * 0.3)),
+        b: Math.min(255, rgb.b + Math.round((255 - rgb.b) * 0.3))
+      };
+      newStop = {
+        name: newName,
+        hex: rgbToHex(lighterRgb.r, lighterRgb.g, lighterRgb.b)
+      };
+    } else if (stopIndex === ramp.stops.length) {
+      // Add to end - make darker
+      const lastStop = ramp.stops[ramp.stops.length - 1];
+      const rgb = hexToRgb(lastStop.hex);
+      const darkerRgb = {
+        r: Math.max(0, rgb.r - Math.round(rgb.r * 0.3)),
+        g: Math.max(0, rgb.g - Math.round(rgb.g * 0.3)),
+        b: Math.max(0, rgb.b - Math.round(rgb.b * 0.3))
+      };
+      newStop = {
+        name: newName,
+        hex: rgbToHex(darkerRgb.r, darkerRgb.g, darkerRgb.b)
+      };
+    } else {
+      // Add between stops - midpoint
+      const prevStop = ramp.stops[stopIndex - 1];
+      const currentRgb = hexToRgb(currentStop.hex);
+      const prevRgb = hexToRgb(prevStop.hex);
+      const midRgb = {
+        r: Math.round((prevRgb.r + currentRgb.r) / 2),
+        g: Math.round((prevRgb.g + currentRgb.g) / 2),
+        b: Math.round((prevRgb.b + currentRgb.b) / 2)
+      };
+      newStop = {
+        name: newName,
+        hex: rgbToHex(midRgb.r, midRgb.g, midRgb.b)
+      };
+    }
+
+    const updatedRamps = colorRamps.map(r => {
+      if (r.id === rampId) {
+        const newStops = [...r.stops];
+        newStops.splice(stopIndex, 0, newStop);
+        return { ...r, stops: newStops };
+      }
+      return r;
+    });
+    
+    onColorRampsChange(updatedRamps);
+  };
+
+  const addStopAfter = (rampId: string, stopIndex: number) => {
+    if (!onColorRampsChange) return;
+    
+    const ramp = colorRamps.find(r => r.id === rampId);
+    if (!ramp) return;
+    
+    const currentStop = ramp.stops[stopIndex];
+    let newStop;
+    
+    // Generate unique name
+    const existingNames = ramp.stops.map(s => s.name);
+    let counter = 1;
+    let newName = "New stop";
+    while (existingNames.includes(newName)) {
+      newName = `New stop ${counter}`;
+      counter++;
+    }
+    
+    if (stopIndex === ramp.stops.length - 1) {
+      // Add to end - make darker
+      const rgb = hexToRgb(currentStop.hex);
+      const darkerRgb = {
+        r: Math.max(0, rgb.r - Math.round(rgb.r * 0.3)),
+        g: Math.max(0, rgb.g - Math.round(rgb.g * 0.3)),
+        b: Math.max(0, rgb.b - Math.round(rgb.b * 0.3))
+      };
+      newStop = {
+        name: newName,
+        hex: rgbToHex(darkerRgb.r, darkerRgb.g, darkerRgb.b)
+      };
+    } else {
+      // Add between stops - midpoint
+      const nextStop = ramp.stops[stopIndex + 1];
+      const currentRgb = hexToRgb(currentStop.hex);
+      const nextRgb = hexToRgb(nextStop.hex);
+      const midRgb = {
+        r: Math.round((currentRgb.r + nextRgb.r) / 2),
+        g: Math.round((currentRgb.g + nextRgb.g) / 2),
+        b: Math.round((currentRgb.b + nextRgb.b) / 2)
+      };
+      newStop = {
+        name: newName,
+        hex: rgbToHex(midRgb.r, midRgb.g, midRgb.b)
+      };
+    }
+    
+    const updatedRamps = colorRamps.map(r => {
+      if (r.id === rampId) {
+        const newStops = [...r.stops];
+        newStops.splice(stopIndex + 1, 0, newStop);
+        return { ...r, stops: newStops };
+      }
+      return r;
+    });
+    
+    onColorRampsChange(updatedRamps);
+  };
+
   // Editable Color Swatch Component
   const EditableColorSwatch = React.memo(({ 
     stop, 
@@ -699,7 +823,8 @@ export function ContrastGrid({
     fontSizes, 
     padding,
     isLocked = false,
-    onToggleLock
+    onToggleLock,
+    rampType = 'x' // 'x' for horizontal axis, 'y' for vertical axis
   }: {
     stop: { name: string; hex: string };
     rampId: string;
@@ -711,6 +836,7 @@ export function ContrastGrid({
     padding: string;
     isLocked?: boolean;
     onToggleLock?: (rampId: string, stopIndex: number) => void;
+    rampType?: 'x' | 'y';
   }) => {
     const [nameValue, setNameValue] = useState(stop.name);
     const [hexValue, setHexValue] = useState(stop.hex);
@@ -766,7 +892,8 @@ export function ContrastGrid({
       setIsEditingHex(false);
       if (hexValue !== stop.hex) {
         if (isValidHexColor(hexValue)) {
-          updateColorStop(rampId, stopIndex, 'hex', hexValue);
+          const normalizedHex = normalizeHex(hexValue);
+          updateColorStop(rampId, stopIndex, 'hex', normalizedHex);
         } else {
           // Reset to original value if invalid
           setHexValue(stop.hex);
@@ -832,6 +959,46 @@ export function ContrastGrid({
       </div>
     );
   });
+
+  // Add Stop Button Cell Component
+  const AddStopButtonCell = ({ 
+    rampId, 
+    stopIndex, 
+    direction, 
+    onAddStop, 
+    rampType 
+  }: {
+    rampId: string;
+    stopIndex: number;
+    direction: 'before' | 'after';
+    onAddStop: (rampId: string, stopIndex: number) => void;
+    rampType: 'x' | 'y';
+  }) => {
+    const [showButton, setShowButton] = useState(false);
+    
+
+
+    return (
+      <div
+        className={`flex items-center justify-center bg-transparent transition-colors cursor-pointer w-full h-full`}
+        onMouseEnter={() => setShowButton(true)}
+        onMouseLeave={() => setShowButton(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onAddStop(rampId, stopIndex);
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={`Add stop ${direction} current position`}
+      >
+        {showButton && (
+          <div className="rounded-full p-1 bg-white/90 hover:bg-white border border-gray-300 shadow-sm w-6 h-6 flex items-center justify-center transition-all hover:scale-110">
+            <Plus className="w-3 h-3 text-gray-600" />
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div ref={containerRef} className="w-full space-y-4" style={{ scrollBehavior: 'auto' }}>
@@ -900,20 +1067,18 @@ export function ContrastGrid({
         </div>
       </div>
 
-      <div className="w-full overflow-x-auto">
+      <div className="relative w-full overflow-x-auto">
         <div 
-          className="grid gap-2 mx-auto" 
+          className="grid gap-0.5 mx-auto"
           style={{ 
-            gridTemplateColumns: `repeat(${xRamp.stops.length + 1}, minmax(60px, 1fr))`
+            gridTemplateColumns: `repeat(${xRamp.stops.length + 1}, minmax(44px, 1fr))`,
+            padding: '17.5px'
           }}
           role="grid"
           aria-label={`Contrast ratio matrix comparing ${xRamp.name} (horizontal) and ${yRamp.name} (vertical) color ramps`}
         >
           {/* Top-left empty cell */}
-          <div 
-            className="bg-white border border-gray-200 aspect-square" 
-            aria-label="Empty cell - top left corner"
-          />
+          <div className="bg-white border border-gray-200 aspect-square" aria-label="Empty cell - top left corner" />
           
           {/* Top row - X ramp color swatches */}
           {xRamp.stops.map((stop, index) => {
@@ -921,35 +1086,11 @@ export function ContrastGrid({
             const isLocked = xRamp.lockedStops?.has(index) || false;
             
             return (
-              <EditableColorSwatch
-                key={`header-${stop.name}`}
-                stop={stop}
-                rampId={xRamp.id}
-                stopIndex={index}
-                textColor={textColor}
-                hexColor={hexColor}
-                textShadow={textShadow}
-                fontSizes={fontSizes}
-                padding={padding}
-                isLocked={isLocked}
-                onToggleLock={toggleLockedStop}
-              />
-            );
-          })}
-
-          {/* Left column and grid cells */}
-          {yRamp.stops.map((rowStop) => {
-            const { textColor, hexColor, textShadow } = getAccessibleTextColors(rowStop.hex);
-            const stopIndex = yRamp.stops.findIndex(s => s.name === rowStop.name);
-            const isLocked = yRamp.lockedStops?.has(stopIndex) || false;
-            
-            return (
-              <React.Fragment key={`row-${rowStop.name}`}>
-                {/* Left column - Y ramp color swatch */}
+              <div key={`x-stop-${index}`} className="relative">
                 <EditableColorSwatch
-                  stop={rowStop}
-                  rampId={yRamp.id}
-                  stopIndex={stopIndex}
+                  stop={stop}
+                  rampId={xRamp.id}
+                  stopIndex={index}
                   textColor={textColor}
                   hexColor={hexColor}
                   textShadow={textShadow}
@@ -957,10 +1098,110 @@ export function ContrastGrid({
                   padding={padding}
                   isLocked={isLocked}
                   onToggleLock={toggleLockedStop}
+                  rampType="x"
                 />
+                {/* Add button positioned to the left of the first stop */}
+                {index === 0 && (
+                  <div className="absolute right-full top-1/2 w-[35px] h-[35px] flex items-center justify-center z-10" style={{ right: 'calc(100% - 17.5px)', transform: 'translateY(-50%)' }}>
+                    <AddStopButtonCell
+                      rampId={xRamp.id}
+                      stopIndex={0}
+                      direction="before"
+                      onAddStop={addStopBefore}
+                      rampType="x"
+                    />
+                  </div>
+                )}
+                {/* Add button positioned to the right of this stop */}
+                {index < xRamp.stops.length - 1 && (
+                  <div className="absolute left-full top-1/2 w-[35px] h-[35px] flex items-center justify-center z-10" style={{ left: 'calc(100% - 17.5px)', transform: 'translateY(-50%)' }}>
+                    <AddStopButtonCell
+                      rampId={xRamp.id}
+                      stopIndex={index}
+                      direction="after"
+                      onAddStop={addStopAfter}
+                      rampType="x"
+                    />
+                  </div>
+                )}
+                {/* Add button positioned to the right of the last stop */}
+                {index === xRamp.stops.length - 1 && (
+                  <div className="absolute left-full top-1/2 w-[35px] h-[35px] flex items-center justify-center z-10" style={{ left: 'calc(100% - 17.5px)', transform: 'translateY(-50%)' }}>
+                    <AddStopButtonCell
+                      rampId={xRamp.id}
+                      stopIndex={xRamp.stops.length - 1}
+                      direction="after"
+                      onAddStop={addStopAfter}
+                      rampType="x"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {/* Left column and grid cells */}
+          {yRamp.stops.map((rowStop, rowIndex) => {
+            const { textColor, hexColor, textShadow } = getAccessibleTextColors(rowStop.hex);
+            const stopIndex = yRamp.stops.findIndex(s => s.name === rowStop.name);
+            const isLocked = yRamp.lockedStops?.has(stopIndex) || false;
+            
+            return (
+              <React.Fragment key={`row-${rowStop.name}`}>
+                {/* Left column - Y ramp color swatch */}
+                <div className="relative">
+                  <EditableColorSwatch
+                    stop={rowStop}
+                    rampId={yRamp.id}
+                    stopIndex={stopIndex}
+                    textColor={textColor}
+                    hexColor={hexColor}
+                    textShadow={textShadow}
+                    fontSizes={fontSizes}
+                    padding={padding}
+                    isLocked={isLocked}
+                    onToggleLock={toggleLockedStop}
+                    rampType="y"
+                  />
+                  {/* Add button positioned above the first stop */}
+                  {rowIndex === 0 && (
+                    <div className="absolute bottom-full left-1/2 w-[35px] h-[35px] flex items-center justify-center z-10" style={{ bottom: 'calc(100% - 17.5px)', transform: 'translateX(-50%)' }}>
+                      <AddStopButtonCell
+                        rampId={yRamp.id}
+                        stopIndex={0}
+                        direction="before"
+                        onAddStop={addStopBefore}
+                        rampType="y"
+                      />
+                    </div>
+                  )}
+                  {/* Add button positioned below this stop */}
+                  {rowIndex < yRamp.stops.length - 1 && (
+                    <div className="absolute top-full left-1/2 w-[35px] h-[35px] flex items-center justify-center z-10" style={{ top: 'calc(100% - 17.5px)', transform: 'translateX(-50%)' }}>
+                      <AddStopButtonCell
+                        rampId={yRamp.id}
+                        stopIndex={stopIndex}
+                        direction="after"
+                        onAddStop={addStopAfter}
+                        rampType="y"
+                      />
+                    </div>
+                  )}
+                  {/* Add button positioned below the last stop */}
+                  {rowIndex === yRamp.stops.length - 1 && (
+                    <div className="absolute top-full left-1/2 w-[35px] h-[35px] flex items-center justify-center z-10" style={{ top: 'calc(100% - 17.5px)', transform: 'translateX(-50%)' }}>
+                      <AddStopButtonCell
+                        rampId={yRamp.id}
+                        stopIndex={yRamp.stops.length - 1}
+                        direction="after"
+                        onAddStop={addStopAfter}
+                        rampType="y"
+                      />
+                    </div>
+                  )}
+                </div>
                 
                 {/* Grid cells - contrast ratios */}
-                {xRamp.stops.map((colStop) => {
+                {xRamp.stops.map((colStop, colIndex) => {
                   const ratio = getContrastRatio(rowStop.hex, colStop.hex);
                   const level = getContrastLevel(ratio);
                   const bgColor = getContrastLevelColor(level);
@@ -993,6 +1234,8 @@ export function ContrastGrid({
             );
           })}
         </div>
+        
+
       </div>
 
       {/* Contrast Adjustment Dialog */}

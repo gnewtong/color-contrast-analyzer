@@ -6,6 +6,7 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { ColorRampPasteDialog } from './ColorRampPasteDialog';
 import { Plus, Trash2, Upload, Copy, Edit3, Lock, Unlock, Check } from 'lucide-react';
+import { isValidHexColor, normalizeHex } from './hexUtils';
 
 interface ColorRampEditorProps {
   colorRamps: ColorRamp[];
@@ -73,12 +74,6 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
     );
   };
 
-  // Hex color validation
-  const isValidHexColor = (color: string): boolean => {
-    const hexRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    return hexRegex.test(color);
-  };
-
   const updateColorStop = (rampId: string, stopIndex: number, field: 'name' | 'hex', value: string) => {
     onColorRampsChange(
       colorRamps.map(ramp =>
@@ -123,9 +118,12 @@ export function ColorRampEditor({ colorRamps, onColorRampsChange, onDuplicateRam
         });
         return; // Don't update if invalid
       }
+      // Normalize hex value
+      const normalizedValue = normalizeHex(value);
+      updateColorStop(rampId, stopIndex, field, normalizedValue);
+    } else {
+      updateColorStop(rampId, stopIndex, field, value);
     }
-
-    updateColorStop(rampId, stopIndex, field, value);
     
     // Clear editing state
     setEditingStates(prev => {

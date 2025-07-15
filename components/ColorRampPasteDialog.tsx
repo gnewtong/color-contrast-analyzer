@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { ColorRamp } from './ContrastUtils';
 import { Upload } from 'lucide-react';
 import { DialogDescription } from './ui/dialog';
+import { parseHexValues } from './hexUtils';
 
 interface ColorRampPasteDialogProps {
   onCreateRamp: (ramp: ColorRamp) => void;
@@ -19,41 +20,8 @@ export function ColorRampPasteDialog({ onCreateRamp, children }: ColorRampPasteD
   const [hexValues, setHexValues] = useState('');
   const [error, setError] = useState('');
 
-  const parseHexValues = (input: string): string[] => {
-    // Remove whitespace and split by lines or commas
-    const lines = input.trim().split(/[\n,\s]+/).filter(line => line.length > 0);
-    
-    const hexPattern = /^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-    const validHexValues: string[] = [];
-    
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (hexPattern.test(trimmed)) {
-        // Ensure it starts with #
-        const hex = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-        // Convert 3-digit hex to 6-digit
-        if (hex.length === 4) {
-          const [, r, g, b] = hex;
-          validHexValues.push(`#${r}${r}${g}${g}${b}${b}`);
-        } else {
-          validHexValues.push(hex.toUpperCase());
-        }
-      }
-    }
-    
-    return validHexValues;
-  };
-
   const generateStopNames = (count: number): string[] => {
-    if (count === 1) return ['500'];
-    if (count === 2) return ['400', '600'];
-    if (count === 3) return ['300', '500', '700'];
-    if (count === 4) return ['200', '400', '600', '800'];
-    if (count === 5) return ['100', '300', '500', '700', '900'];
-    
-    // For more than 5 colors, use incremental numbers
-    const step = Math.floor(900 / (count - 1));
-    return Array.from({ length: count }, (_, i) => `${100 + i * step}`);
+    return Array.from({ length: count }, (_, i) => `${(i + 1) * 100}`);
   };
 
   const handleCreate = () => {

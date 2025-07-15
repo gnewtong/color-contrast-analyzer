@@ -11,6 +11,7 @@ import { Separator } from './ui/separator';
 import { Alert, AlertDescription } from './ui/alert';
 import { Copy, Lock, Trash2, Unlock } from 'lucide-react';
 import { ColorRamp } from './ContrastUtils';
+import { isValidHexColor, normalizeHex } from './hexUtils';
 
 interface ColorRampGeneratorProps {
   onGenerateRamp: (ramp: ColorRamp) => void;
@@ -82,6 +83,8 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
   const [showPasteColorsDialog, setShowPasteColorsDialog] = useState(false);
   const [pasteColorsInput, setPasteColorsInput] = useState('');
   const [pasteColorsError, setPasteColorsError] = useState('');
+  const [backgroundColorInput, setBackgroundColorInput] = useState(config.backgroundColor);
+  const [referenceColorInputs, setReferenceColorInputs] = useState<string[]>(config.referenceColors);
 
   // Undo functionality for generator internal state
   const [undoHistory, setUndoHistory] = useState<{
@@ -133,45 +136,6 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
     });
     setLockedRampPositions(newLockedPositions);
     
-    // Debug output
-    console.log('=== RAMP GENERATION DEBUG ===');
-    console.log('Config:', {
-      referenceColors: config.referenceColors,
-      targetRatios: config.targetRatios,
-      backgroundColor: config.backgroundColor,
-      numStops: config.numStops,
-      numReferenceColors: config.numReferenceColors,
-      lockedColors: Array.from(lockedColors)
-    });
-    console.log('Result:', {
-      colors: result.colors.map((color, index) => ({
-        index,
-        hex: color.hex,
-        targetRatio: color.targetRatio,
-        actualRatio: color.actualRatio,
-        method: color.method,
-        confidence: color.confidence,
-        isLocked: color.isLocked,
-        explanation: color.explanation
-      })),
-      overallConfidence: result.overallConfidence,
-      summary: result.summary
-    });
-    if (result.debugInfo) {
-      console.log('Debug Info:', {
-        variations: result.debugInfo.variations.map(v => ({
-          hex: v.hex,
-          ratio: v.ratio,
-          lightness: v.lightness,
-          hue: v.hue,
-          saturation: v.saturation
-        })),
-        algorithmSteps: result.debugInfo.algorithmSteps,
-        warnings: result.debugInfo.warnings
-      });
-    }
-    console.log('=== END DEBUG ===');
-    
     return result;
   }, [config, lockedColors]);
 
@@ -181,9 +145,10 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
   };
 
   const handleReferenceColorChange = (index: number, color: string) => {
-    const newColors = [...config.referenceColors];
-    newColors[index] = color;
-    handleConfigChange({ referenceColors: newColors });
+    const normalizedColor = normalizeHex(color);
+    const newReferenceColors = [...config.referenceColors];
+    newReferenceColors[index] = normalizedColor;
+    handleConfigChange({ referenceColors: newReferenceColors });
   };
 
   const removeReferenceColor = (index: number) => {
@@ -322,12 +287,17 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
     return ratios;
   };
 
+  const generateStopNames = (count: number): string[] => {
+    return Array.from({ length: count }, (_, i) => `${(i + 1) * 100}`);
+  };
+
   const handleGenerateRamp = () => {
+    const stopNames = generateStopNames(rampResult.colors.length);
     const newRamp: ColorRamp = {
       id: existingRamp?.id || `generated-${Date.now()}`,
       name: rampName,
       stops: rampResult.colors.map((color, index) => ({
-        name: `Stop ${index + 1}`,
+        name: stopNames[index] || `${(index + 1) * 100}`,
         hex: color.hex
       })),
       lockedStops: lockedRampPositions || new Set()
@@ -409,12 +379,26 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
                 id="background-color"
                 type="color"
                 value={config.backgroundColor}
-                onChange={(e) => handleConfigChange({ backgroundColor: e.target.value })}
+                onChange={(e) => {
+                  const color = e.target.value;
+                  setBackgroundColorInput(color);
+                  handleConfigChange({ backgroundColor: color });
+                }}
                 className="w-16 h-10"
               />
               <Input
-                value={config.backgroundColor}
-                onChange={(e) => handleConfigChange({ backgroundColor: e.target.value })}
+                value={backgroundColorInput}
+                onChange={(e) => setBackgroundColorInput(e.target.value)}
+                onBlur={(e) => {
+                  const normalizedColor = normalizeHex(e.target.value);
+                  setBackgroundColorInput(normalizedColor);
+                  handleConfigChange({ backgroundColor: normalizedColor });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  }
+                }}
                 placeholder="#ffffff"
               />
             </div>
@@ -507,12 +491,34 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
                   <Input
                     type="color"
                     value={config.referenceColors[i] || '#000000'}
-                    onChange={(e) => handleReferenceColorChange(i, e.target.value)}
+                    onChange={(e) => {
+                      const color = e.target.value;
+                      const newInputs = [...referenceColorInputs];
+                      newInputs[i] = color;
+                      setReferenceColorInputs(newInputs);
+                      handleReferenceColorChange(i, color);
+                    }}
                     className="w-12 h-8"
                   />
                   <Input
-                    value={config.referenceColors[i] || '#000000'}
-                    onChange={(e) => handleReferenceColorChange(i, e.target.value)}
+                    value={referenceColorInputs[i] || '#000000'}
+                    onChange={(e) => {
+                      const newInputs = [...referenceColorInputs];
+                      newInputs[i] = e.target.value;
+                      setReferenceColorInputs(newInputs);
+                    }}
+                    onBlur={(e) => {
+                      const normalizedColor = normalizeHex(e.target.value);
+                      const newInputs = [...referenceColorInputs];
+                      newInputs[i] = normalizedColor;
+                      setReferenceColorInputs(newInputs);
+                      handleReferenceColorChange(i, normalizedColor);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                      }
+                    }}
                     placeholder="#000000"
                     className="flex-1"
                   />
@@ -583,7 +589,22 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
                     min="1"
                     max="21"
                     value={config.targetRatios[i] || 3.0}
-                    onChange={(e) => handleTargetRatioChange(i, parseFloat(e.target.value))}
+                    onChange={(e) => {
+                      // Don't process immediately, just update local state
+                      const newRatios = [...config.targetRatios];
+                      newRatios[i] = parseFloat(e.target.value) || 3.0;
+                      setConfig(prev => ({ ...prev, targetRatios: newRatios }));
+                    }}
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value) || 3.0;
+                      const clampedValue = Math.max(1, Math.min(21, value));
+                      handleTargetRatioChange(i, clampedValue);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                      }
+                    }}
                     className="flex-1"
                   />
                 </div>
@@ -680,25 +701,23 @@ export function ColorRampGenerator({ onGenerateRamp, existingRamp, onUndo, canUn
   );
 }
 
-// Add this utility function near the top
-function isValidHexColor(hex: string): boolean {
-  return /^#[0-9A-Fa-f]{6}$/.test(hex);
-}
+
 
 // Core algorithm functions
 function generateRamp(config: RampConfig, lockedColors: Set<number>): RampResult {
   const { referenceColors, targetRatios, backgroundColor } = config;
   
-  console.log('=== GENERATE RAMP START ===');
-  console.log('Input config:', { referenceColors, targetRatios, backgroundColor, lockedColors: Array.from(lockedColors) });
+  // Validate background color before processing
+  if (!isValidHexColor(backgroundColor)) {
+    const defaultConfig = { ...config, backgroundColor: '#ffffff' };
+    return generateRamp(defaultConfig, lockedColors);
+  }
   
   // Create color variations from reference colors
   const variations = createColorVariations(referenceColors, backgroundColor);
-  console.log('Created variations:', variations.length);
   
   // If no valid variations, return placeholder ramp
   if (variations.length === 0) {
-    console.log('No valid variations found');
     const placeholder: GeneratedColor = {
       hex: '#cccccc',
       targetRatio: 1,
@@ -729,8 +748,6 @@ function generateRamp(config: RampConfig, lockedColors: Set<number>): RampResult
   algorithmSteps.push(`Reference colors: ${referenceColors.filter(c => isValidHexColor(c)).join(', ')}`);
   algorithmSteps.push(`Background color: ${backgroundColor}`);
   algorithmSteps.push(`Target ratios: ${targetRatios.map(r => r.toFixed(1)).join(', ')}`);
-  
-  console.log('Algorithm steps:', algorithmSteps);
 
   // First, handle locked colors by placing them in their best-matching slots
   const lockedColorSlots = new Map<number, { color: string; actualRatio: number }>();
@@ -797,12 +814,6 @@ function generateRamp(config: RampConfig, lockedColors: Set<number>): RampResult
   
   // Generate summary
   const summary = generateSummary(colors, variations);
-  
-  console.log('=== GENERATE RAMP END ===');
-  console.log('Final colors:', colors.map((c, i) => ({ index: i, hex: c.hex, target: c.targetRatio, actual: c.actualRatio, method: c.method, confidence: c.confidence })));
-  console.log('Hex values only:', colors.map(c => c.hex));
-  console.log('Overall confidence:', overallConfidence);
-  console.log('Warnings:', warnings);
   
   return {
     colors,
@@ -1199,6 +1210,12 @@ function generateSummary(colors: GeneratedColor[], variations: ColorVariation[])
 
 // Utility functions (keeping the existing ones)
 function calculateContrastRatio(color1: string, color2: string): number {
+  // Validate both colors before processing
+  if (!isValidHexColor(color1) || !isValidHexColor(color2)) {
+    console.warn('Invalid hex color in contrast calculation, using default ratio');
+    return 1.0;
+  }
+  
   const luminance1 = getLuminance(color1);
   const luminance2 = getLuminance(color2);
   
@@ -1218,7 +1235,11 @@ function getLuminance(color: string): number {
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  if (!result) throw new Error(`Invalid hex color: ${hex}`);
+  if (!result) {
+    // Return a default color instead of throwing an error
+    console.warn(`Invalid hex color: ${hex}, using default`);
+    return { r: 128, g: 128, b: 128 };
+  }
   return {
     r: parseInt(result[1], 16),
     g: parseInt(result[2], 16),

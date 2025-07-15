@@ -1,11 +1,12 @@
-# Color Contrast Analyzer Grid
+# Color Ramp Generator
 
-A React-based desktop application for analyzing color contrast ratios between different color ramps. Built with Vite, TypeScript, and Tailwind CSS.
+A React-based desktop application for generating and analyzing color ramps for design systems with accessibility in mind. Built with Vite, TypeScript, and Tailwind CSS.
 
 ## Features
 
-- **Contrast Grid Analysis**: Visualize contrast ratios between different color ramps
-- **Color Ramp Management**: Create and edit color ramps with multiple stops
+- **Color Ramp Generation**: Create and edit color ramps with multiple stops
+- **Contrast Analysis**: Visualize contrast ratios between different color ramps
+- **Design System Focus**: Built specifically for design system color management
 - **Inline Editing**: Edit color names and hex values directly in the grid
 - **Responsive Design**: Grid adapts to container width with smooth scaling
 - **Export Functionality**: Export contrast grids as SVG files
@@ -31,7 +32,7 @@ A React-based desktop application for analyzing color contrast ratios between di
 1. Clone the repository:
 ```bash
 git clone <your-repo-url>
-cd color-contrast-analyzer-grid
+cd color-ramp-generator
 ```
 
 2. Install dependencies:
@@ -64,7 +65,7 @@ The built files will be in the `dist` directory.
 
 ### Analyzing Contrast
 
-1. Select color ramps for the X and Y axes in the "Contrast Grid" tab
+1. Select color ramps for the X and Y axes in the "Inspect" tab
 2. The grid will display contrast ratios between all color combinations
 3. Colors are automatically chosen for optimal readability (black or white text)
 

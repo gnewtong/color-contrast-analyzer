@@ -122,13 +122,13 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-full mx-auto space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Color Contrast Analyzer
+            Color Ramp Generator
           </h1>
           <p className="text-gray-600 mb-4">
-            Analyze contrast ratios between color ramps to ensure accessibility compliance
+            Generate and analyze color ramps for design systems with accessibility in mind
           </p>
           <div className="flex justify-center gap-4 text-sm" role="status" aria-live="polite">
             <Badge variant="secondary">
@@ -142,7 +142,7 @@ export default function App() {
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto">
-            <TabsTrigger value="grid">Contrast Grid</TabsTrigger>
+            <TabsTrigger value="grid">Inspect</TabsTrigger>
             <TabsTrigger value="editor">Saved Ramps</TabsTrigger>
             <TabsTrigger value="generator">Generate Ramp</TabsTrigger>
           </TabsList>
