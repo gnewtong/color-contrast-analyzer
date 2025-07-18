@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+        <meta charset="UTF-8" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Color Ramp Generator – Accessible Color Ramps for Design Systems</title>
+    <meta name="description" content="Generate and analyze accessible color ramps for design systems. Instantly check contrast, export palettes, and ensure WCAG compliance.">
+    <meta name="keywords" content="color ramp, color palette, accessibility, contrast, WCAG, design system, color generator, color contrast analyzer">
+    <meta property="og:title" content="Color Ramp Generator" />
+    <meta property="og:description" content="Generate and analyze accessible color ramps for design systems." />
+    <meta property="og:url" content="http://color-ramp-generator.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="http://color-ramp-generator.com/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Color Ramp Generator" />
+    <meta name="twitter:description" content="Generate and analyze accessible color ramps for design systems." />
+    <meta name="twitter:image" content="http://color-ramp-generator.com/og-image.png" />
+    <link rel="canonical" href="http://color-ramp-generator.com/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- robots.txt and sitemap.xml references for SEO -->
+    <meta name="robots" content="index, follow">
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Color Ramp Generator",
+      "url": "http://color-ramp-generator.com/",
+      "description": "Generate and analyze accessible color ramps for design systems.",
+      "applicationCategory": "DesignApplication",
+      "operatingSystem": "All"
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- SEO: Keyword-rich intro and how-it-works content for search engines -->
+    <section style="display:none">
+      <h1>Color Ramp Generator</h1>
+      <p>Generate and analyze color ramps for design systems with accessibility in mind. Instantly check contrast, export palettes, and ensure WCAG compliance.</p>
+      <h2>How the Color Ramp Generator Works</h2>
+      <p>The generator creates color ramps based on contrast ratio targets against a background color.</p>
+      <h3>The Algorithm Explained</h3>
+      <ul>
+        <li><strong>Color Variation Generation:</strong> The algorithm creates hundreds of color variations from your reference colors by adjusting brightness, saturation, and lightness while preserving the original color character. These variations serve as the building blocks for all other methods. Example: A vibrant green reference color generates variations from very light to very dark, all maintaining the green hue and vibrancy. These variations are then used for interpolation and adjustment methods.</li>
+        <li><strong>Smart Color Selection:</strong> For each target contrast ratio, the algorithm finds the best color using three methods in order of preference: Interpolation (mixes two color variations), Adjustment (tweaks brightness/saturation), and Generation (creates new colors using the average hue/saturation).</li>
+        <li><strong>Vibrancy Preservation:</strong> The algorithm maintains the vibrancy of your reference colors throughout the ramp, especially for darker shades. Darker colors get boosted saturation, lighter colors get moderate saturation, ensuring the ramp maintains visual consistency.</li>
+        <li><strong>Locked Color Placement:</strong> Locked colors are automatically placed in the slots that best match their actual contrast ratios, ensuring they appear where they make the most sense in the ramp. Example: A locked color with 3.2:1 contrast will be placed in the 3.3:1 slot, not necessarily slot 1.</li>
+      </ul>
+      <h3>How to Use the Generator</h3>
+      <ol>
+        <li><strong>Set Background Color:</strong> Choose the background color that your ramp will be used against (usually white or black).</li>
+        <li><strong>Define Contrast Targets:</strong> Set the contrast ratios you want to achieve. Common targets: 1.5, 3, 4.5, 7, 21.</li>
+        <li><strong>Add Reference Colors:</strong> Provide specific colors you want to include in the ramp. These will be preserved exactly.</li>
+        <li><strong>Lock Important Colors:</strong> Use the lock icon to prevent specific colors from being modified during generation.</li>
+        <li><strong>Generate and Review:</strong> Click "Generate Ramp" to create your color ramp and add it to your collection.</li>
+      </ol>
+      <h3>Understanding the Preview</h3>
+      <ul>
+        <li><strong>Target Ratio:</strong> The contrast ratio you specified for this slot</li>
+        <li><strong>Actual Ratio:</strong> The real contrast ratio of the generated color</li>
+        <li><strong>Method:</strong> How the color was created (interpolation, adjustment, or generation)</li>
+        <li><strong>Lock Icon:</strong> Shows when a color is locked and won't be modified</li>
+      </ul>
+      <p>Don't worry if actual ratios don't exactly match targets - the algorithm prioritizes creating usable, visually pleasing color ramps.</p>
+    </section>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html> 
