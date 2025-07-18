@@ -59,7 +59,7 @@ The built files will be in the `dist` directory.
 
 ### Creating Color Ramps
 
-1. Navigate to the "Configure Colors" tab
+1. Navigate to the "Generate ramp" tab
 2. Add new color ramps using the interface
 3. Each ramp can have multiple color stops with names and hex values
 
@@ -67,17 +67,17 @@ The built files will be in the `dist` directory.
 
 1. Select color ramps for the X and Y axes in the "Inspect" tab
 2. The grid will display contrast ratios between all color combinations
-3. Colors are automatically chosen for optimal readability (black or white text)
 
 ### Editing Colors
 
-- Click on any color name or hex value in the grid to edit inline
+- Click on any color or contrast ratio in the grid to edit inline
+- Add start, end, or midpoint stops
+- Adjust colors to reach certain contrast ratios
 - Changes are automatically saved
-- Invalid hex values will revert to the original value
 
 ### Exporting
 
-- Use the "Export SVG" button to download the current grid as an SVG file
+- Use the "Export SVG" button to download the current grid as an SVG file, or copy directly to clipboard
 - The exported file includes all color information and contrast ratios
 
 ## Project Structure
@@ -95,12 +95,6 @@ The built files will be in the `dist` directory.
 ```
 
 ## Development
-
-### Key Components
-
-- **ContrastGrid**: Renders the main contrast analysis grid with inline editing
-- **ColorRampEditor**: Manages color ramp creation and editing
-- **ContrastUtils**: Contains utility functions for contrast calculations
 
 ### Responsive Design
 
@@ -120,9 +114,3 @@ The grid uses CSS Grid with `minmax(80px, 1fr)` columns to ensure:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Built with accessibility in mind following WCAG guidelines
-- Uses modern React patterns and TypeScript for type safety
-- Responsive design principles for cross-device compatibility 
